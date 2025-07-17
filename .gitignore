@@ -1,0 +1,12 @@
+# Google Cloud / Google Apps Script
+client_secret_*.json
+appsscript.json
+
+# Personal notes
+memo.txt
+各種資料.txt
+解説書.txt
+
+# OS-specific
+.DS_Store
+*.swp 

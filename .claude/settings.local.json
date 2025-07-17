@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(clasp push:*)",
+      "WebFetch(domain:developers.facebook.com)",
+      "Bash(clasp status:*)",
+      "Bash(clasp:*)",
+      "WebFetch(domain:developers.google.com)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(grep:*)"
+    ],
+    "deny": []
+  }
+}
