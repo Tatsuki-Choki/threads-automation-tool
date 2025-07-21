@@ -8,7 +8,9 @@
       "WebFetch(domain:developers.google.com)",
       "Bash(mv:*)",
       "Bash(rm:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(touch:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

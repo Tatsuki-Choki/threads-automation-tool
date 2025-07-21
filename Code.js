@@ -28,6 +28,14 @@ function testFunction() {
 function onOpen() {
   try {
     const ui = SpreadsheetApp.getUi();
+    
+    // 管理者用メニュー
+    ui.createMenu('🔒 管理者用')
+      .addItem('基本設定を表示', 'showSettingsSheet')
+      .addItem('基本設定を非表示', 'hideSettingsSheet')
+      .addToUi();
+    
+    // Threads自動化メニュー
     ui.createMenu('Threads自動化')
     .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
     .addSeparator()
@@ -597,6 +605,11 @@ function getUserInfo(accessToken) {
 function resetSettingsSheet() {
   const ui = SpreadsheetApp.getUi();
   
+  // パスワード確認
+  if (!verifyPassword('基本設定シート再構成')) {
+    return;
+  }
+  
   const response = ui.alert(
     '基本設定シート再構成',
     '基本設定シートを削除して再作成しますか？\n\n' +
@@ -800,6 +813,11 @@ function initializeLogsSheet() {
 function resetAllSheets() {
   const ui = SpreadsheetApp.getUi();
   
+  // パスワード確認
+  if (!verifyPassword('すべてのシート再構成')) {
+    return;
+  }
+  
   const response = ui.alert(
     'すべてのシートを再構成',
     'すべてのシートを削除して再作成しますか？\n\n' +
@@ -861,6 +879,84 @@ function resetAllSheets() {
         logError('resetAllSheets', error);
       }
     }
+  }
+}
+
+// ===========================
+// シート保護機能
+// ===========================
+// パスワード定数
+const SHEET_PROTECTION_PASSWORD = 'tsukichiyo.inc@gmail.com';
+
+// 共通のパスワード確認関数
+function verifyPassword(promptTitle) {
+  const ui = SpreadsheetApp.getUi();
+  const passwordPrompt = ui.prompt(
+    promptTitle || 'パスワード入力',
+    'パスワードを入力してください',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (passwordPrompt.getSelectedButton() !== ui.Button.OK) {
+    return false;
+  }
+
+  const input = passwordPrompt.getResponseText();
+  
+  if (input !== SHEET_PROTECTION_PASSWORD) {
+    ui.alert('エラー', 'パスワードが違います。', ui.ButtonSet.OK);
+    return false;
+  }
+  
+  return true;
+}
+
+function showSettingsSheet() {
+  if (!verifyPassword('基本設定シート表示')) {
+    return;
+  }
+
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
+  if (!sheet) {
+    ui.alert('エラー', '「基本設定」シートが見つかりません。', ui.ButtonSet.OK);
+    return;
+  }
+
+  sheet.showSheet();
+  SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sheet);
+  ui.alert('成功', '「基本設定」シートを表示しました。', ui.ButtonSet.OK);
+  logOperation('基本設定シート表示', 'success', 'パスワード認証成功');
+}
+
+function hideSettingsSheet() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
+  
+  if (!sheet) {
+    ui.alert('エラー', '「基本設定」シートが見つかりません。', ui.ButtonSet.OK);
+    return;
+  }
+  
+  const result = ui.alert(
+    '確認',
+    '「基本設定」シートを非表示にしますか？',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (result === ui.Button.YES) {
+    sheet.hideSheet();
+    ui.alert('完了', '「基本設定」シートを非表示にしました。', ui.ButtonSet.OK);
+    logOperation('基本設定シート非表示', 'success', 'シートを非表示にしました');
+  }
+}
+
+function initializeSheetProtection() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
+  if (sheet) {
+    sheet.hideSheet();
+    console.log('基本設定シートを初期状態で非表示に設定しました。');
+    logOperation('基本設定シート保護初期化', 'success', '初期状態で非表示に設定');
   }
 }
 
