@@ -1,0 +1,25 @@
+{
+  "name": "threads-automation-tool",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "deploy:1": "rimraf dist/project-1/* && cpr src/. dist/project-1/ -o && cd dist/project-1 && clasp push",
+    "deploy:2": "rimraf dist/project-2/* && cpr src/. dist/project-2/ -o && cd dist/project-2 && clasp push",
+    "deploy:3": "rimraf dist/project-3/* && cpr src/. dist/project-3/ -o && cd dist/project-3 && clasp push",
+    "deploy:4": "rimraf dist/project-4/* && cpr src/. dist/project-4/ -o && cd dist/project-4 && clasp push",
+    "deploy:5": "rimraf dist/project-5/* && cpr src/. dist/project-5/ -o && cd dist/project-5 && clasp push",
+    "deploy:6": "rimraf dist/project-6/* && cpr src/. dist/project-6/ -o && cd dist/project-6 && clasp push",
+    "deploy:7": "rimraf dist/project-7/* && cpr src/. dist/project-7/ -o && cd dist/project-7 && clasp push",
+    "deploy:8": "rimraf dist/project-8/* && cpr src/. dist/project-8/ -o && cd dist/project-8 && clasp push",
+    "deploy:9": "rimraf dist/project-9/* && cpr src/. dist/project-9/ -o && cd dist/project-9 && clasp push",
+    "deploy:10": "rimraf dist/project-10/* && cpr src/. dist/project-10/ -o && cd dist/project-10 && clasp push"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "cpr": "^3.0.1",
+    "rimraf": "^6.0.1"
+  }
+}

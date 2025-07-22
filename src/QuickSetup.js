@@ -53,7 +53,23 @@ function quickSetupWithExistingToken() {
     // 4. 基本的なログ記録
     logOperation('クイックセットアップ', 'success', `ユーザー: @${userInfo.username}`);
     
-    // 5. テスト投稿の準備
+    // 5. デフォルトトリガーの設定
+    const triggerResponse = ui.alert(
+      'トリガー設定',
+      'デフォルト設定でトリガーを作成しますか？\n\n' +
+      '• 予約投稿: 5分ごと\n' +
+      '• 返信取得: 30分ごと\n' +
+      '• トークン更新: 毎日午前3時\n\n' +
+      '（後でメニューから変更可能です）',
+      ui.ButtonSet.YES_NO
+    );
+    
+    if (triggerResponse === ui.Button.YES) {
+      // デフォルト値でトリガーを設定
+      setupDefaultTriggers();
+    }
+    
+    // 6. テスト投稿の準備
     const testResponse = ui.alert(
       'セットアップ完了',
       'セットアップが完了しました！\n\nテスト投稿を実行しますか？',
@@ -128,6 +144,50 @@ function testConnectionAndGetUserInfo(accessToken, userId) {
     
   } catch (error) {
     throw new Error(`接続テスト失敗: ${error.toString()}`);
+  }
+}
+
+// ===========================
+// デフォルトトリガーの設定
+// ===========================
+function setupDefaultTriggers() {
+  try {
+    // 既存のトリガーを削除
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+      ScriptApp.deleteTrigger(trigger);
+    });
+    
+    // デフォルト値
+    const postInterval = 5;    // 5分
+    const replyInterval = 30;  // 30分
+    const tokenHour = 3;       // 午前3時
+    
+    // 予約投稿用トリガー（5分ごと）
+    ScriptApp.newTrigger('processScheduledPosts')
+      .timeBased()
+      .everyMinutes(postInterval)
+      .create();
+    
+    // リプライ取得＋自動返信の統合トリガー（30分ごと）
+    ScriptApp.newTrigger('fetchAndAutoReply')
+      .timeBased()
+      .everyMinutes(replyInterval)
+      .create();
+    
+    // トークンリフレッシュ用トリガー（毎日午前3時）
+    ScriptApp.newTrigger('refreshAccessToken')
+      .timeBased()
+      .everyDays(1)
+      .atHour(tokenHour)
+      .create();
+    
+    logOperation('デフォルトトリガー設定', 'success', 
+      `投稿:${postInterval}分, リプライ:${replyInterval}分, トークン:${tokenHour}時`);
+    
+  } catch (error) {
+    logError('setupDefaultTriggers', error);
+    throw new Error('トリガーの設定に失敗しました: ' + error.toString());
   }
 }
 

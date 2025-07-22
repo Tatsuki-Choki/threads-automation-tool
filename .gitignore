@@ -1,6 +1,7 @@
 # Google Cloud / Google Apps Script
 client_secret_*.json
 appsscript.json
+.clasprc.json
 
 # Personal notes
 memo.txt
@@ -9,4 +10,11 @@ memo.txt
 
 # OS-specific
 .DS_Store
-*.swp 
+*.swp
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Claude settings
+.claude/settings.local.json 

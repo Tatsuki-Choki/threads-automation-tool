@@ -824,60 +824,48 @@ function resetAllSheets() {
     '⚠️ 警告:\n' +
     '・すべてのデータが削除されます\n' +
     '・設定情報も初期化されます\n' +
-    '・この操作は取り消せません\n\n' +
-    '続行しますか？',
+    '・この操作は取り消せません',
     ui.ButtonSet.YES_NO
   );
   
   if (response == ui.Button.YES) {
-    const confirmResponse = ui.alert(
-      '最終確認',
-      '本当にすべてのシートを再構成しますか？\n' +
-      'この操作により、すべてのデータが失われます。',
-      ui.ButtonSet.YES_NO
-    );
-    
-    if (confirmResponse == ui.Button.YES) {
-      try {
-        ui.alert('処理中...', 'シートを再構成しています。しばらくお待ちください。', ui.ButtonSet.OK);
-        
-        // 各シートを順番に再構成
-        initializeSettingsSheet();
-        SpreadsheetApp.flush();
-        
-        initializeScheduledPostsSheet();
-        SpreadsheetApp.flush();
-        
-        initializeRepliesSheet();
-        SpreadsheetApp.flush();
-        
-        resetAutoReplyKeywordsSheet();
-        SpreadsheetApp.flush();
-        
-        resetReplyHistorySheet();
-        SpreadsheetApp.flush();
-        
-        initializeLogsSheet();
-        SpreadsheetApp.flush();
-        
-        // 完了メッセージ
-        ui.alert(
-          '再構成完了',
-          'すべてのシートを再構成しました。\n\n' +
-          '次のステップ:\n' +
-          '1. 基本設定シートに必要な情報を入力\n' +
-          '2. 初期設定を実行\n' +
-          '3. トリガーを設定',
-          ui.ButtonSet.OK
-        );
-        
-        logOperation('全シート再構成', 'success', 'すべてのシートを再構成しました');
-        
-      } catch (error) {
-        console.error('全シート再構成エラー:', error);
-        ui.alert('エラー', 'シートの再構成中にエラーが発生しました:\n' + error.message, ui.ButtonSet.OK);
-        logError('resetAllSheets', error);
-      }
+    try {
+      // 各シートを順番に再構成
+      initializeSettingsSheet();
+      SpreadsheetApp.flush();
+      
+      initializeScheduledPostsSheet();
+      SpreadsheetApp.flush();
+      
+      initializeRepliesSheet();
+      SpreadsheetApp.flush();
+      
+      initializeキーワード設定Sheet();
+      SpreadsheetApp.flush();
+      
+      initializeReplyHistorySheet();
+      SpreadsheetApp.flush();
+      
+      initializeLogsSheet();
+      SpreadsheetApp.flush();
+      
+      // 完了メッセージ
+      ui.alert(
+        '再構成完了',
+        'すべてのシートを再構成しました。\n\n' +
+        '次のステップ:\n' +
+        '1. 基本設定シートに必要な情報を入力\n' +
+        '2. 初期設定を実行\n' +
+        '3. トリガーを設定',
+        ui.ButtonSet.OK
+      );
+      
+      logOperation('全シート再構成', 'success', 'すべてのシートを再構成しました');
+      
+    } catch (error) {
+      console.error('全シート再構成エラー:', error);
+      ui.alert('エラー', 'シートの再構成中にエラーが発生しました:\n' + error.message, ui.ButtonSet.OK);
+      logError('resetAllSheets', error);
     }
   }
 }
