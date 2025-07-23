@@ -338,66 +338,15 @@ function getParentPostId(replyId, config) {
 // Webhookイベント記録
 // ===========================
 function recordWebhookEvent(eventType, data, matchedKeyword, status) {
+  // Webhookログシートは削除されたため、通常のログに記録
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Webhookログ');
-    
-    if (!sheet) {
-      // Webhookログシートがない場合は作成
-      createWebhookLogSheet();
-      return recordWebhookEvent(eventType, data, matchedKeyword, status);
-    }
-    
-    sheet.appendRow([
-      new Date(),                    // 受信日時
-      eventType,                     // イベントタイプ
-      data.id,                       // ID
-      data.username || 'unknown',    // ユーザー名
-      data.text || '',               // テキスト
-      matchedKeyword || '',          // マッチしたキーワード
-      status,                        // ステータス
-      JSON.stringify(data)           // 生データ
-    ]);
-    
+    const details = `Event: ${eventType}, User: ${data.username || 'unknown'}, Text: ${data.text || ''}, Matched: ${matchedKeyword || 'none'}`;
+    logOperation('Webhook受信', status || 'success', details);
   } catch (error) {
     console.error('Webhookイベント記録エラー:', error);
   }
 }
 
-// ===========================
-// Webhookログシート作成
-// ===========================
-function createWebhookLogSheet() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = spreadsheet.insertSheet('Webhookログ');
-  
-  // ヘッダー設定
-  const headers = [
-    '受信日時',
-    'イベントタイプ',
-    'ID',
-    'ユーザー名',
-    'テキスト',
-    'マッチキーワード',
-    'ステータス',
-    '生データ'
-  ];
-  
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
-    .setFontWeight('bold');
-  
-  // 列幅調整
-  sheet.setColumnWidth(1, 150); // 受信日時
-  sheet.setColumnWidth(2, 120); // イベントタイプ
-  sheet.setColumnWidth(3, 200); // ID
-  sheet.setColumnWidth(4, 150); // ユーザー名
-  sheet.setColumnWidth(5, 300); // テキスト
-  sheet.setColumnWidth(6, 150); // マッチキーワード
-  sheet.setColumnWidth(7, 100); // ステータス
-  sheet.setColumnWidth(8, 400); // 生データ
-}
 
 
 // ===========================

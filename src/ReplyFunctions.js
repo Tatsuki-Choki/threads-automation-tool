@@ -386,6 +386,12 @@ function recordReply(comment, replyText) {
     replyText,
     matchedKeyword
   ]);
+  
+  // 新しい行の背景色をクリアして文字色を黒に設定
+  const lastRow = sheet.getLastRow();
+  const range = sheet.getRange(lastRow, 1, 1, 6);
+  range.setBackground(null);
+  range.setFontColor('#000000');
 }
 
 // ===========================
@@ -556,6 +562,9 @@ function initializeキーワード設定Sheet() {
     .build();
   
   sheet.setConditionalFormatRules([enabledRule1, enabledRule2]);
+  
+  // 1行目を固定
+  sheet.setFrozenRows(1);
   
   logOperation('キーワード設定シート初期化', 'success', 'シートを再構成しました');
 }
@@ -776,6 +785,9 @@ function initializeReplyHistorySheet() {
   
   // 日付列のフォーマット
   sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  
+  // 最上行を固定
+  sheet.setFrozenRows(1);
   
   // 説明コメントを追加
   sheet.getRange('A1').setNote(

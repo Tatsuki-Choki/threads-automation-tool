@@ -454,6 +454,12 @@ function recordAutoReply(reply, replyText, matchedKeyword) {
       matchedKeyword                 // マッチしたキーワード
     ]);
     
+    // 新しい行の背景色をクリアして文字色を黒に設定
+    const lastRow = sheet.getLastRow();
+    const range = sheet.getRange(lastRow, 1, 1, 6);
+    range.setBackground(null);
+    range.setFontColor('#000000');
+    
     // キャッシュも更新
     updateReplyCache(reply.id, reply.from?.id || username);
     
@@ -559,6 +565,18 @@ function manualAutoReply() {
 // ===========================
 function fetchAndAutoReply() {
   console.log('===== 統合処理開始 =====');
+  
+  // API制限チェック
+  try {
+    const quota = checkDailyAPIQuota();
+    if (quota && quota.remaining < 1000) {
+      console.log('API残り回数が少ないため、リプライ取得をスキップします');
+      logOperation('リプライ取得', 'warning', `API残り回数: ${quota.remaining}`);
+      return;
+    }
+  } catch (error) {
+    console.error('API制限チェックエラー:', error);
+  }
   
   // リプライ取得
   fetchAndSaveReplies();

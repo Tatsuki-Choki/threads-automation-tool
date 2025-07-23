@@ -64,10 +64,17 @@ function onOpen() {
       .addItem('📋 データ確認', 'checkScheduledPostsData')
       .addItem('🐛 予約投稿デバッグ実行', 'debugScheduledPosts')
       .addItem('💪 強制実行（過去含む）', 'forceProcessScheduledPosts'))
+    .addSeparator()
+    .addSubMenu(ui.createMenu('📊 API管理')
+      .addItem('📈 API使用状況確認', 'checkAPIUsageStatus')
+      .addItem('🔄 API使用回数リセット（緊急用）', 'resetAPIQuotaManually'))
     .addToUi();
   
     // 初回起動時の設定チェック
     checkInitialSetup();
+    
+    // 既存シートのヘッダー行を固定
+    freezeExistingSheetHeaders();
   } catch (error) {
     console.error('メニュー作成エラー:', error);
     // エラーが発生してもスプレッドシートは使えるようにする
@@ -430,48 +437,34 @@ function processTriggerSettings(postInterval, replyInterval, tokenHour) {
 // ユーティリティ関数
 // ===========================
 function logOperation(operation, status, details) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ログ');
-  if (!sheet) return;
-  
-  const now = new Date();
-  
-  // 新しいログを2行目に挿入（1行目はヘッダー）
-  sheet.insertRowAfter(1);
-  sheet.getRange(2, 1, 1, 4).setValues([[
-    now,
-    operation,
-    status,
-    details || ''
-  ]]);
-  
-  // 24時間以上前のログを削除（ただし最低50件は保持）
-  const data = sheet.getDataRange().getValues();
-  const cutoffTime = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24時間前
-  const minRowsToKeep = 50; // 最低保持する行数
-  
-  let lastValidRow = 1; // ヘッダー行
-  let rowsWithinTimeLimit = 0;
-  
-  // 24時間以内のログをカウント
-  for (let i = 2; i < data.length; i++) {
-    const timestamp = data[i][0];
-    if (timestamp instanceof Date && timestamp > cutoffTime) {
-      rowsWithinTimeLimit++;
-      lastValidRow = i;
-    } else {
-      break; // 古いログが見つかったら終了
+  try {
+    const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ログ');
+    if (!logSheet) return;
+
+    const timestamp = new Date();
+    details = details || '';
+    
+    // 2行目に新しい行を挿入
+    logSheet.insertRowAfter(1);
+    
+    // 新しく挿入した行（2行目）のRangeを取得
+    const newRow = logSheet.getRange(2, 1, 1, 4); // 日時, 操作, ステータス, 詳細 の4列
+    
+    // 値を設定
+    newRow.setValues([[timestamp, operation, status, details]]);
+    
+    // 書式を標準にリセット
+    newRow.setBackground(null).setFontColor('#000000').setFontWeight('normal');
+    
+    // 日時フォーマットを設定（年月日時分秒）
+    logSheet.getRange(2, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+
+    // ログが2000行を超えたら古いもの（2001行目以降）を削除
+    if (logSheet.getLastRow() > 2000) {
+      logSheet.deleteRows(2001, logSheet.getLastRow() - 2000);
     }
-  }
-  
-  // 削除する行を決定（最低50件は保持）
-  const totalDataRows = sheet.getLastRow() - 1; // ヘッダーを除く
-  const rowsToKeep = Math.max(minRowsToKeep, rowsWithinTimeLimit);
-  const targetLastRow = Math.min(1 + rowsToKeep, sheet.getLastRow());
-  
-  // 古いログを削除
-  if (targetLastRow < sheet.getLastRow()) {
-    const rowsToDelete = sheet.getLastRow() - targetLastRow;
-    sheet.deleteRows(targetLastRow + 1, rowsToDelete);
+  } catch (error) {
+    console.error('logOperation エラー:', error);
   }
 }
 
@@ -805,6 +798,9 @@ function initializeLogsSheet() {
     'success',
     'ログシートを再構成しました'
   ]]);
+  
+  // 初期ログのフォントウェイトを標準に
+  sheet.getRange(2, 1, 1, 4).setFontWeight('normal');
 }
 
 // ===========================
@@ -868,6 +864,28 @@ function resetAllSheets() {
       logError('resetAllSheets', error);
     }
   }
+}
+
+// ===========================
+// 既存シートの行固定設定
+// ===========================
+function freezeExistingSheetHeaders() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetsToFreeze = [
+    '基本設定',
+    '予約投稿',
+    'リプライ追跡',
+    '自動返信キーワード設定',
+    '自動応答結果',
+    'ログ'
+  ];
+  
+  sheetsToFreeze.forEach(sheetName => {
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    if (sheet && sheet.getFrozenRows() === 0) {
+      sheet.setFrozenRows(1);
+    }
+  });
 }
 
 // ===========================

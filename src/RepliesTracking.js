@@ -53,8 +53,9 @@ function fetchRepliesAndCheckAutoReply(lastCheckTime) {
   let auto受信したリプライ = 0;
   
   try {
-    // 最近の投稿を取得（最大50件）
-    const recentPosts = getMyRecentPosts(50);
+    // 最近の投稿を取得（件数を制限してAPI呼び出しを削減）
+    const POST_LIMIT = 10; // 50件から10件に削減
+    const recentPosts = getMyRecentPosts(POST_LIMIT);
     
     if (!recentPosts || recentPosts.length === 0) {
       logOperation('統合処理', 'info', '投稿が見つかりませんでした');
@@ -92,8 +93,9 @@ function fetchAndSaveReplies() {
     
     logOperation('リプライ取得開始', 'info', '最近の投稿からリプライを取得します');
     
-    // 最近の投稿を取得（最大50件）
-    const recentPosts = getMyRecentPosts(50);
+    // 最近の投稿を取得（件数を制限してAPI呼び出しを削減）
+    const POST_LIMIT = 10; // 50件から10件に削減
+    const recentPosts = getMyRecentPosts(POST_LIMIT);
     
     if (!recentPosts || recentPosts.length === 0) {
       logOperation('リプライ取得', 'info', '投稿が見つかりませんでした');
@@ -119,13 +121,25 @@ function fetchAndSaveReplies() {
 }
 
 // ===========================
-// 自分の最近の投稿を取得
+// 自分の最近の投稿を取得（キャッシュ機能付き）
 // ===========================
 function getMyRecentPosts(limit = 25) {
   const accessToken = getConfig('ACCESS_TOKEN');
   const userId = getConfig('USER_ID');
   
+  // キャッシュの確認（5分間有効）
+  const cache = CacheService.getScriptCache();
+  const cacheKey = `recent_posts_${limit}`;
+  const cachedData = cache.get(cacheKey);
+  
+  if (cachedData) {
+    console.log('getMyRecentPosts: キャッシュから取得');
+    return JSON.parse(cachedData);
+  }
+  
   try {
+    console.log(`getMyRecentPosts: ${limit}件の投稿を取得中...`);
+    
     const response = UrlFetchApp.fetch(
       `${THREADS_API_BASE}/v1.0/${userId}/threads?fields=id,text,timestamp,media_type,media_url,permalink&limit=${limit}`,
       {
@@ -139,6 +153,9 @@ function getMyRecentPosts(limit = 25) {
     const result = JSON.parse(response.getContentText());
     
     if (result.data) {
+      console.log(`getMyRecentPosts: ${result.data.length}件の投稿を取得しました`);
+      // キャッシュに保存（5分間）
+      cache.put(cacheKey, JSON.stringify(result.data), 300);
       return result.data;
     } else {
       console.error('投稿取得エラー:', result.error?.message);
@@ -146,7 +163,15 @@ function getMyRecentPosts(limit = 25) {
     }
     
   } catch (error) {
+    console.error('getMyRecentPosts エラー:', error.toString());
     logError('getMyRecentPosts', error);
+    
+    // URLFetch制限エラーの場合は空配列を返す
+    if (error.toString().includes('urlfetch') || error.toString().includes('サービス')) {
+      logOperation('API制限', 'error', 'URLFetch制限に達しました。リプライ取得をスキップします。');
+      return [];
+    }
+    
     return [];
   }
 }
@@ -285,12 +310,16 @@ function saveReplyToSheet(reply, originalPost, sheet) {
     sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('受信したリプライ');
   }
   
-  const data = sheet.getDataRange().getValues();
+  const dataRange = sheet.getDataRange();
+  const data = dataRange.getValues();
   
-  // 既存のリプライをチェック（重複防止）
+  // 既存のリプライをチェック（重複防止） - 両方を文字列として比較
+  const replyIdStr = reply.id.toString();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === reply.id) { // リプライIDが一致
+    const sheetIdStr = data[i][1].toString();
+    if (sheetIdStr === replyIdStr) { // リプライIDが一致
       // 既に存在する場合はスキップ
+      console.log(`リプライID: ${replyIdStr} は既に存在するためスキップします。`);
       return 'exists';
     }
   }
@@ -298,9 +327,12 @@ function saveReplyToSheet(reply, originalPost, sheet) {
   // 新規リプライを追加
   const username = reply.from?.username || reply.username || 'unknown';
   
-  sheet.appendRow([
+  // IDを文字列として保存するために、先頭にシングルクォートを付与
+  const replyIdForSheet = "'" + reply.id;
+  
+  const newRow = sheet.appendRow([
     new Date(), // 取得日時
-    reply.id, // リプライID
+    replyIdForSheet, // リプライID (文字列として保存)
     originalPost.id, // 元投稿ID
     new Date(reply.timestamp), // リプライ日時
     username, // リプライユーザー名
@@ -308,6 +340,12 @@ function saveReplyToSheet(reply, originalPost, sheet) {
     new Date(), // 最終更新日時
     '' // メモ欄
   ]);
+  
+  // 新しい行の背景色をクリアして文字色を黒に設定
+  const lastRow = sheet.getLastRow();
+  const range = sheet.getRange(lastRow, 1, 1, 8);
+  range.setBackground(null);
+  range.setFontColor('#000000');
   
   return 'new';
 }
@@ -417,6 +455,9 @@ function initializeRepliesSheet() {
   sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
   sheet.getRange(2, 4, sheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
   sheet.getRange(2, 7, sheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  
+  // 最上行を固定
+  sheet.setFrozenRows(1);
   
   logOperation('受信したリプライシート初期化', 'success', 'シートを作成しました');
 }
@@ -550,5 +591,95 @@ function testIntegratedReplyAndAutoReply() {
       ui.alert('統合処理テストでエラーが発生しました。\n\n' +
         'エラー: ' + error.message);
     }
+  }
+}
+
+// ===========================
+// リプライ取得デバッグ
+// ===========================
+function debugFetchReplies() {
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    console.log('===== リプライ取得デバッグ開始 =====');
+    
+    // 1. 認証情報の確認
+    const accessToken = getConfig('ACCESS_TOKEN');
+    const userId = getConfig('USER_ID');
+    
+    if (!accessToken || !userId) {
+      ui.alert('エラー', '認証情報が設定されていません。基本設定を確認してください。', ui.ButtonSet.OK);
+      return;
+    }
+    
+    console.log('認証情報: OK');
+    
+    // 2. 最近の投稿を1件だけ取得してテスト
+    console.log('最近の投稿を取得中...');
+    const recentPosts = getMyRecentPosts(1);
+    
+    if (!recentPosts || recentPosts.length === 0) {
+      ui.alert('エラー', '投稿が取得できませんでした。\n\n考えられる原因:\n- アクセストークンが無効\n- 投稿が存在しない', ui.ButtonSet.OK);
+      return;
+    }
+    
+    const post = recentPosts[0];
+    console.log(`投稿ID: ${post.id}, 投稿日時: ${post.timestamp}`);
+    
+    // 3. その投稿のリプライを取得
+    console.log('リプライを取得中...');
+    const response = UrlFetchApp.fetch(
+      `${THREADS_API_BASE}/v1.0/${post.id}/replies?fields=id,text,timestamp,username,replied_to,is_reply`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        },
+        muteHttpExceptions: true
+      }
+    );
+    
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    console.log(`レスポンスコード: ${responseCode}`);
+    console.log(`レスポンス: ${responseText}`);
+    
+    const result = JSON.parse(responseText);
+    
+    if (result.error) {
+      // エラーコード10は権限不足
+      if (result.error.code === 10) {
+        ui.alert(
+          '権限エラー',
+          'リプライを取得する権限がありません。\n\n' +
+          'threads_manage_replies権限が必要です。\n' +
+          'Meta開発者ダッシュボードで権限を追加してください。',
+          ui.ButtonSet.OK
+        );
+      } else {
+        ui.alert('エラー', `APIエラー: ${result.error.message}`, ui.ButtonSet.OK);
+      }
+      return;
+    }
+    
+    // 4. 結果を表示
+    const replies = result.data || [];
+    const message = `デバッグ結果:\n\n` +
+      `投稿ID: ${post.id}\n` +
+      `投稿内容: ${post.text ? post.text.substring(0, 50) + '...' : '(なし)'}\n` +
+      `リプライ数: ${replies.length}\n\n`;
+    
+    if (replies.length > 0) {
+      const replyList = replies.slice(0, 3).map(r => 
+        `- @${r.username}: ${r.text ? r.text.substring(0, 30) + '...' : '(なし)'}`
+      ).join('\n');
+      
+      ui.alert('成功', message + '最新のリプライ:\n' + replyList, ui.ButtonSet.OK);
+    } else {
+      ui.alert('情報', message + 'この投稿にはまだリプライがありません。', ui.ButtonSet.OK);
+    }
+    
+  } catch (error) {
+    console.error('デバッグエラー:', error);
+    ui.alert('エラー', `デバッグ中にエラーが発生しました:\n${error.toString()}`, ui.ButtonSet.OK);
   }
 }

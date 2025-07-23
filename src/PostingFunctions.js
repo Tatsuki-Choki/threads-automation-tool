@@ -52,6 +52,8 @@ function initializeScheduledPostsSheet() {
     '投稿URL',
     'エラー',
     'リトライ',
+    'ツリーID',
+    '投稿順序',
     '画像URL_1枚目',
     '画像URL_2枚目',
     '画像URL_3枚目',
@@ -81,13 +83,22 @@ function initializeScheduledPostsSheet() {
   const sampleData = [
     [1, '【サンプル投稿1】\\nこれはテスト投稿です。\\n#threads #自動投稿', 
      Utilities.formatDate(futureDate, 'JST', 'yyyy/MM/dd'), '10:00',
-     '投稿予約中', '', '', 0, '', '', '', '', '', '', '', '', '', ''],
+     '投稿予約中', '', '', 0, '', '', '', '', '', '', '', '', '', '', '', ''],
     [2, '【サンプル投稿2】\\n画像付き投稿のサンプルです。\\n画像URLを右側の列に入力してください。', 
      Utilities.formatDate(futureDate2, 'JST', 'yyyy/MM/dd'), '15:00',
-     '投稿予約中', '', '', 0, 'https://example.com/image1.jpg', '', '', '', '', '', '', '', '', ''],
+     '投稿予約中', '', '', 0, '', '', 'https://example.com/image1.jpg', '', '', '', '', '', '', '', '', ''],
     [3, '【サンプル投稿3】\\n複数画像の投稿サンプル', 
      Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '12:00',
-     '投稿予約中', '', '', 0, 'https://example.com/image1.jpg', 'https://example.com/image2.jpg', '', '', '', '', '', '', '', '']
+     '投稿予約中', '', '', 0, '', '', 'https://example.com/image1.jpg', 'https://example.com/image2.jpg', '', '', '', '', '', '', '', ''],
+    [4, '【ツリー投稿サンプル1-1】\\nこれがツリーの最初の投稿です。',
+     Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
+     '投稿予約中', '', '', 0, 'thread_A', '1', '', '', '', '', '', '', '', '', '', ''],
+    [5, '【ツリー投稿サンプル1-2】\\nこれが2番目の投稿。最初の投稿への返信になります。',
+     Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
+     '投稿予約中', '', '', 0, 'thread_A', '2', '', '', '', '', '', '', '', '', '', ''],
+    [6, '【ツリー投稿サンプル1-3】\\nそして3番目。ツリーの最後です。',
+     Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
+     '投稿予約中', '', '', 0, 'thread_A', '3', '', '', '', '', '', '', '', '', '', '']
   ];
   
   sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
@@ -101,9 +112,11 @@ function initializeScheduledPostsSheet() {
   sheet.setColumnWidth(6, 300);  // 投稿URL
   sheet.setColumnWidth(7, 200);  // エラー
   sheet.setColumnWidth(8, 80);   // リトライ
+  sheet.setColumnWidth(9, 100);  // ツリーID
+  sheet.setColumnWidth(10, 80);  // 投稿順序
   
   // 画像URL列の幅
-  for (let i = 9; i <= 18; i++) {
+  for (let i = 11; i <= 20; i++) {
     sheet.setColumnWidth(i, 200);
   }
   
@@ -153,8 +166,16 @@ function initializeScheduledPostsSheet() {
     '投稿URL: 投稿後のURL（自動入力）\\n' +
     'エラー: エラーメッセージ（自動入力）\\n' +
     'リトライ: 再試行回数（自動入力）\\n' +
+    'ツリーID: 同じツリーにする投稿に共通のIDを入力（例: thread_A）\\n' +
+    '投稿順序: ツリー内での投稿順番（1, 2, 3...）\\n' +
     '画像URL: 投稿に添付する画像のURL（最大10枚）'
   );
+  
+  // ツリーID列のヘルプテキスト
+  sheet.getRange('I1').setNote('同じツリー（スレッド）として投稿したい複数の行に、共通のIDを入力してください');
+  
+  // 投稿順序列のヘルプテキスト
+  sheet.getRange('J1').setNote('ツリー内での投稿順序を数値で指定（1が最初の投稿）');
   
   // 条件付き書式を追加（ステータスの視覚化）
   const statusRange = sheet.getRange(2, 5, 1000, 1);
@@ -189,6 +210,9 @@ function initializeScheduledPostsSheet() {
   
   sheet.setConditionalFormatRules([pendingRule, publishedRule, failedRule, cancelledRule]);
   
+  // 1行目を固定
+  sheet.setFrozenRows(1);
+  
   logOperation('予約投稿シート初期化', 'success', 'シートを再構成しました');
 }
 
@@ -201,6 +225,12 @@ function processScheduledPosts() {
   logOperation('予約投稿処理', 'start', `実行開始時刻: ${new Date().toLocaleString('ja-JP')}`);
   
   try {
+    // API制限チェック（本日のAPI使用状況を確認）
+    const dailyQuota = checkDailyAPIQuota();
+    if (dailyQuota.isNearLimit) {
+      console.log('API制限に近づいています。処理を制限します。');
+      logOperation('API制限警告', 'warning', `本日のAPI使用数: ${dailyQuota.count}/20000`);
+    }
     // 認証情報の事前チェック
     const accessToken = getConfig('ACCESS_TOKEN');
     const userId = getConfig('USER_ID');
@@ -219,14 +249,37 @@ function processScheduledPosts() {
       return;
     }
     
-    logOperation('予約投稿処理開始', 'info', `${posts.length}件の投稿を処理`);
+    // 投稿をツリーごとにグループ化
+    const postGroups = groupPostsByTree(posts);
+    const totalGroups = Object.keys(postGroups).length;
     
-    posts.forEach(post => {
+    logOperation('予約投稿処理開始', 'info', `${posts.length}件の投稿を${totalGroups}グループとして処理`);
+    
+    // グループごとに処理
+    Object.entries(postGroups).forEach(([groupId, groupPosts]) => {
       try {
-        processPost(post);
+        if (groupPosts.length === 1 && !groupPosts[0].treeId) {
+          // 単発投稿
+          processPost(groupPosts[0]);
+        } else {
+          // ツリー投稿
+          processTreePosts(groupPosts);
+        }
       } catch (error) {
-        logError('processPost', error);
-        updatePostStatus(post.row, 'failed', null, error.toString());
+        logError('processPostGroup', error);
+        
+        // API制限エラーの場合は、投稿を「投稿予約中」に戻す
+        if (error.toString().includes('urlfetch') || error.toString().includes('制限')) {
+          groupPosts.forEach(post => {
+            updatePostStatus(post.row, 'pending', null, 
+              `API制限により延期されました。次回の実行時に再試行されます。`);
+          });
+        } else {
+          // その他のエラーの場合
+          groupPosts.forEach(post => {
+            updatePostStatus(post.row, 'failed', null, error.toString());
+          });
+        }
       }
     });
     
@@ -247,8 +300,8 @@ function getScheduledPosts() {
   console.log(`現在時刻（JST）: ${Utilities.formatDate(now, 'JST', 'yyyy/MM/dd HH:mm:ss')}`);
   
   for (let i = 1; i < data.length; i++) {
-    // 新しい列構造: ID, 投稿内容, 予定日付, 予定時刻, ステータス, 投稿URL, エラー, リトライ, 画像URL_1枚目〜10枚目
-    const [id, content, scheduledDate, scheduledTime, status, postedUrl, error, retryCount, ...imageUrls] = data[i];
+    // 新しい列構造: ID, 投稿内容, 予定日付, 予定時刻, ステータス, 投稿URL, エラー, リトライ, ツリーID, 投稿順序, 画像URL_1枚目〜10枚目
+    const [id, content, scheduledDate, scheduledTime, status, postedUrl, error, retryCount, treeId, postOrder, ...imageUrls] = data[i];
     
     // デバッグ: 生データを出力
     console.log(`行${i + 1} 生データ: ID=${id}, 日付=${scheduledDate}, 時刻=${scheduledTime}, ステータス="${status}"`);
@@ -309,7 +362,9 @@ function getScheduledPosts() {
           content: content,
           imageUrls: validImageUrls,
           scheduledTime: scheduledDateTime,
-          retryCount: retryCount || 0
+          retryCount: retryCount || 0,
+          treeId: treeId || '',
+          postOrder: postOrder || 0
         });
         
         console.log(`行${i + 1}: 予約投稿として処理対象に追加`);
@@ -321,6 +376,108 @@ function getScheduledPosts() {
 }
 
 // ===========================
+// ツリーごとに投稿をグループ化
+// ===========================
+function groupPostsByTree(posts) {
+  const groups = {};
+  
+  posts.forEach(post => {
+    let groupKey;
+    if (post.treeId) {
+      // ツリーIDがある場合は、それをグループキーとする
+      groupKey = `tree_${post.treeId}`;
+    } else {
+      // ツリーIDがない場合は、個別のグループとする
+      groupKey = `single_${post.row}`;
+    }
+    
+    if (!groups[groupKey]) {
+      groups[groupKey] = [];
+    }
+    
+    groups[groupKey].push(post);
+  });
+  
+  // 各グループ内で投稿順序でソート
+  Object.keys(groups).forEach(key => {
+    groups[key].sort((a, b) => {
+      // まず投稿順序でソート
+      if (a.postOrder && b.postOrder) {
+        return parseInt(a.postOrder) - parseInt(b.postOrder);
+      }
+      // 投稿順序がない場合は行番号でソート
+      return a.row - b.row;
+    });
+  });
+  
+  return groups;
+}
+
+// ===========================
+// ツリー投稿の処理
+// ===========================
+function processTreePosts(posts) {
+  console.log(`ツリー投稿開始: ${posts.length}件の投稿`);
+  logOperation('ツリー投稿', 'start', `ツリーID: ${posts[0].treeId}, 投稿数: ${posts.length}`);
+  
+  let previousPostId = null;
+  
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    
+    try {
+      console.log(`ツリー投稿 ${i + 1}/${posts.length}: 行${post.row}`);
+      
+      // 返信先IDを設定（最初の投稿以外）
+      if (i > 0 && previousPostId) {
+        post.replyToId = previousPostId;
+      }
+      
+      // 投稿を実行
+      const result = processPost(post);
+      
+      if (result && result.postId) {
+        previousPostId = result.postId;
+        console.log(`投稿成功: ID=${previousPostId}`);
+        
+        // API制限対策として、次の投稿までに待機（最後の投稿以外）
+        if (i < posts.length - 1) {
+          console.log('次の投稿まで5秒待機...');
+          Utilities.sleep(5000); // 3秒から5秒に増やす
+        }
+      } else {
+        // 投稿失敗時は、残りのツリー投稿をキャンセル
+        console.error('投稿失敗 - result:', result);
+        throw new Error(`ツリー投稿の${i + 1}番目が失敗しました`);
+      }
+      
+    } catch (error) {
+      console.error(`ツリー投稿エラー: ${error}`);
+      logOperation('ツリー投稿', 'error', `${i + 1}番目の投稿でエラー: ${error.toString()}`);
+      
+      // API制限エラーの場合は、投稿を「投稿予約中」に戻す
+      if (error.toString().includes('urlfetch') || error.toString().includes('制限')) {
+        for (let j = i; j < posts.length; j++) {
+          updatePostStatus(posts[j].row, 'pending', null, 
+            `API制限により延期されました。次回の実行時に再試行されます。`);
+        }
+        logOperation('API制限', 'warning', 'URLFetch制限に達したため、残りの投稿を延期しました');
+      } else {
+        // その他のエラーの場合
+        for (let j = i; j < posts.length; j++) {
+          updatePostStatus(posts[j].row, 'failed', null, 
+            `ツリー投稿の${i + 1}番目でエラーが発生したため、この投稿はキャンセルされました`);
+        }
+      }
+      
+      throw error;
+    }
+  }
+  
+  logOperation('ツリー投稿', 'success', `ツリーID: ${posts[0].treeId}, ${posts.length}件すべて成功`);
+}
+
+// ===========================
 // 投稿処理
 // ===========================
 function processPost(post) {
@@ -328,32 +485,57 @@ function processPost(post) {
   
   if (post.retryCount >= maxRetries) {
     updatePostStatus(post.row, 'failed', null, '最大リトライ回数に達しました');
-    return;
+    return null;
   }
   
   let result;
   
-  if (post.imageUrls && post.imageUrls.length > 0) {
-    // 画像付き投稿（複数画像対応）
-    if (post.imageUrls.length === 1) {
-      // 1枚の場合は従来の関数を使用
-      result = postWithImage(post.content, post.imageUrls[0]);
+  // 返信先IDがある場合（ツリー投稿の2番目以降）
+  if (post.replyToId) {
+    if (post.imageUrls && post.imageUrls.length > 0) {
+      // 画像付き返信
+      if (post.imageUrls.length === 1) {
+        result = postReplyWithImage(post.content, post.imageUrls[0], post.replyToId);
+      } else {
+        result = postReplyWithMultipleImages(post.content, post.imageUrls, post.replyToId);
+      }
     } else {
-      // 複数枚の場合は新しい関数を使用
-      result = postWithMultipleImages(post.content, post.imageUrls);
+      // テキストのみ返信
+      result = postReplyTextOnly(post.content, post.replyToId);
     }
   } else {
-    // テキストのみ投稿
-    result = postTextOnly(post.content);
+    // 通常の投稿（返信ではない）
+    if (post.imageUrls && post.imageUrls.length > 0) {
+      // 画像付き投稿（複数画像対応）
+      if (post.imageUrls.length === 1) {
+        // 1枚の場合は従来の関数を使用
+        result = postWithImage(post.content, post.imageUrls[0]);
+      } else {
+        // 複数枚の場合は新しい関数を使用
+        result = postWithMultipleImages(post.content, post.imageUrls);
+      }
+    } else {
+      // テキストのみ投稿
+      result = postTextOnly(post.content);
+    }
   }
   
   if (result.success) {
     updatePostStatus(post.row, 'posted', result.postUrl, null);
     logOperation('投稿成功', 'success', `ID: ${post.id}, URL: ${result.postUrl}`);
+    return result; // 投稿IDを含む結果を返す
   } else {
-    const newRetryCount = post.retryCount + 1;
-    updatePostStatus(post.row, 'pending', null, result.error, newRetryCount);
-    logOperation('投稿失敗', 'error', `ID: ${post.id}, エラー: ${result.error}`);
+    // API制限エラーの場合は、リトライカウントを増やさない
+    if (result.error && (result.error.includes('urlfetch') || result.error.includes('制限'))) {
+      updatePostStatus(post.row, 'pending', null, 
+        `API制限により延期されました。次回の実行時に再試行されます。`, post.retryCount);
+      logOperation('投稿延期', 'warning', `ID: ${post.id}, API制限により延期`);
+    } else {
+      const newRetryCount = post.retryCount + 1;
+      updatePostStatus(post.row, 'pending', null, result.error, newRetryCount);
+      logOperation('投稿失敗', 'error', `ID: ${post.id}, エラー: ${result.error}`);
+    }
+    return null;
   }
 }
 
@@ -369,6 +551,8 @@ function postTextOnly(text) {
   }
   
   try {
+    console.log('postTextOnly 開始 - テキスト:', text.substring(0, 50) + '...');
+    
     // メディアコンテナの作成
     const createResponse = UrlFetchApp.fetch(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
@@ -386,7 +570,13 @@ function postTextOnly(text) {
       }
     );
     
-    const createResult = JSON.parse(createResponse.getContentText());
+    const responseCode = createResponse.getResponseCode();
+    const responseText = createResponse.getContentText();
+    console.log('API レスポンスコード:', responseCode);
+    console.log('API レスポンス:', responseText);
+    
+    const createResult = JSON.parse(responseText);
+    incrementAPICallCount(1); // API使用回数を記録
     
     if (createResult.id) {
       // 投稿の公開
@@ -396,7 +586,18 @@ function postTextOnly(text) {
     }
     
   } catch (error) {
-    return { success: false, error: error.toString() };
+    console.error('postTextOnly エラー詳細:', error);
+    console.error('エラースタック:', error.stack);
+    console.error('エラーメッセージ:', error.message);
+    
+    // URLFetch制限の特定のエラーメッセージを確認
+    const errorMessage = error.toString();
+    if (errorMessage.includes('UrlFetch') || errorMessage.includes('urlfetch') || errorMessage.includes('サービス')) {
+      console.error('URLFetch制限エラーを検出');
+      return { success: false, error: `API制限エラー: ${errorMessage}` };
+    }
+    
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -526,6 +727,7 @@ function publishPost(containerId) {
     );
     
     const publishResult = JSON.parse(publishResponse.getContentText());
+    incrementAPICallCount(1); // API使用回数を記録
     
     if (publishResult.id) {
       // 投稿URLの構築
@@ -535,6 +737,155 @@ function publishPost(containerId) {
       return { success: true, postUrl: postUrl, postId: publishResult.id };
     } else {
       return { success: false, error: publishResult.error?.message || '公開失敗' };
+    }
+    
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===========================
+// 返信投稿（テキストのみ）
+// ===========================
+function postReplyTextOnly(text, replyToId) {
+  const accessToken = getConfig('ACCESS_TOKEN');
+  const userId = getConfig('USER_ID');
+  
+  if (!accessToken || !userId) {
+    return { success: false, error: '認証情報が見つかりません' };
+  }
+  
+  try {
+    // メディアコンテナの作成（返信先IDを指定）
+    const createResponse = UrlFetchApp.fetch(
+      `${THREADS_API_BASE}/v1.0/${userId}/threads`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        payload: JSON.stringify({
+          media_type: 'TEXT',
+          text: text,
+          reply_to_id: replyToId
+        }),
+        muteHttpExceptions: true
+      }
+    );
+    
+    const createResult = JSON.parse(createResponse.getContentText());
+    incrementAPICallCount(1); // API使用回数を記録
+    
+    if (createResult.id) {
+      // 投稿の公開
+      return publishPost(createResult.id);
+    } else {
+      return { success: false, error: createResult.error?.message || 'コンテナ作成失敗' };
+    }
+    
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===========================
+// 返信投稿（画像付き）
+// ===========================
+function postReplyWithImage(text, imageUrl, replyToId) {
+  const accessToken = getConfig('ACCESS_TOKEN');
+  const userId = getConfig('USER_ID');
+  
+  if (!accessToken || !userId) {
+    return { success: false, error: '認証情報が見つかりません' };
+  }
+  
+  try {
+    // Google DriveのURLを公開URLに変換
+    const publicImageUrl = convertToPublicUrl(imageUrl);
+    
+    // メディアコンテナの作成（返信先IDを指定）
+    const createResponse = UrlFetchApp.fetch(
+      `${THREADS_API_BASE}/v1.0/${userId}/threads`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        payload: JSON.stringify({
+          media_type: 'IMAGE',
+          image_url: publicImageUrl,
+          text: text || '',
+          reply_to_id: replyToId
+        }),
+        muteHttpExceptions: true
+      }
+    );
+    
+    const createResult = JSON.parse(createResponse.getContentText());
+    
+    if (createResult.id) {
+      // 少し待機（画像処理のため）
+      Utilities.sleep(3000);
+      
+      // 投稿の公開
+      return publishPost(createResult.id);
+    } else {
+      return { success: false, error: createResult.error?.message || 'コンテナ作成失敗' };
+    }
+    
+  } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===========================
+// 返信投稿（複数画像付き）
+// ===========================
+function postReplyWithMultipleImages(text, imageUrls, replyToId) {
+  const accessToken = getConfig('ACCESS_TOKEN');
+  const userId = getConfig('USER_ID');
+  
+  if (!accessToken || !userId) {
+    return { success: false, error: '認証情報が見つかりません' };
+  }
+  
+  try {
+    // 各画像URLを公開URLに変換
+    const publicUrls = imageUrls.map(url => convertToPublicUrl(url));
+    
+    // メディアコンテナの作成（返信先IDを指定）
+    const payload = {
+      media_type: 'CAROUSEL',
+      children: publicUrls.map(url => ({ media_url: url })),
+      text: text,
+      reply_to_id: replyToId
+    };
+    
+    const createResponse = UrlFetchApp.fetch(
+      `${THREADS_API_BASE}/v1.0/${userId}/threads`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      }
+    );
+    
+    const createResult = JSON.parse(createResponse.getContentText());
+    
+    if (createResult.id) {
+      // 少し待機（画像処理のため）
+      Utilities.sleep(5000);
+      
+      // 投稿の公開
+      return publishPost(createResult.id);
+    } else {
+      return { success: false, error: createResult.error?.message || 'コンテナ作成失敗' };
     }
     
   } catch (error) {
@@ -618,6 +969,42 @@ function updatePostStatus(row, status, postUrl, error, retryCount) {
 }
 
 // ===========================
+// API使用状況チェック
+// ===========================
+function checkDailyAPIQuota() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const today = new Date().toDateString();
+  const lastResetDate = scriptProperties.getProperty('API_QUOTA_RESET_DATE');
+  const apiCount = parseInt(scriptProperties.getProperty('API_CALL_COUNT') || '0');
+  
+  // 日付が変わっていたらリセット
+  if (lastResetDate !== today) {
+    scriptProperties.setProperty('API_QUOTA_RESET_DATE', today);
+    scriptProperties.setProperty('API_CALL_COUNT', '0');
+    return { count: 0, isNearLimit: false };
+  }
+  
+  // Google Apps ScriptのUrlFetchApp制限は1日20,000回
+  const DAILY_LIMIT = 20000;
+  const WARNING_THRESHOLD = 19000; // 95%で警告
+  
+  return {
+    count: apiCount,
+    isNearLimit: apiCount >= WARNING_THRESHOLD,
+    remaining: DAILY_LIMIT - apiCount
+  };
+}
+
+// ===========================
+// API使用回数を記録
+// ===========================
+function incrementAPICallCount(count = 1) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const currentCount = parseInt(scriptProperties.getProperty('API_CALL_COUNT') || '0');
+  scriptProperties.setProperty('API_CALL_COUNT', String(currentCount + count));
+}
+
+// ===========================
 // 予約投稿データの確認（デバッグ用）
 // ===========================
 function checkScheduledPostsData() {
@@ -649,6 +1036,44 @@ function checkScheduledPostsData() {
   }
   
   ui.alert('データ確認', message, ui.ButtonSet.OK);
+}
+
+// ===========================
+// API使用状況確認（デバッグ用）
+// ===========================
+function checkAPIUsageStatus() {
+  const ui = SpreadsheetApp.getUi();
+  const quota = checkDailyAPIQuota();
+  
+  const message = `API使用状況レポート\n\n` +
+    `本日の使用回数: ${quota.count.toLocaleString()}\n` +
+    `残り使用可能回数: ${quota.remaining.toLocaleString()}\n` +
+    `1日の制限: 20,000回\n\n` +
+    `${quota.isNearLimit ? '⚠️ 警告: API制限に近づいています！' : '✅ 正常範囲内です'}`;
+  
+  ui.alert('API使用状況', message, ui.ButtonSet.OK);
+}
+
+// ===========================
+// 手動でAPI使用回数をリセット（緊急用）
+// ===========================
+function resetAPIQuotaManually() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'API使用回数リセット',
+    'API使用回数のカウンターをリセットしますか？\n\n' +
+    '⚠️ 注意: これは緊急時のみ使用してください。',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response === ui.Button.YES) {
+    const scriptProperties = PropertiesService.getScriptProperties();
+    scriptProperties.setProperty('API_CALL_COUNT', '0');
+    scriptProperties.setProperty('API_QUOTA_RESET_DATE', new Date().toDateString());
+    
+    ui.alert('完了', 'API使用回数をリセットしました。', ui.ButtonSet.OK);
+    logOperation('API使用回数リセット', 'info', '手動リセット実行');
+  }
 }
 
 // ===========================
