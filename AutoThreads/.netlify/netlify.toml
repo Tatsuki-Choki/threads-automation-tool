@@ -1,0 +1,26 @@
+plugins = []
+headers = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "/Users/tatsuki/Documents/Workspace/【Opus】threads-automation-tool/AutoThreads"
+publishOrigin = "default"
+base = "/Users/tatsuki/Documents/Workspace/【Opus】threads-automation-tool/AutoThreads"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]

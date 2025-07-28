@@ -11,7 +11,8 @@
       "Bash(grep:*)",
       "Bash(touch:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git cherry-pick:*)"
     ],
     "deny": []
   }

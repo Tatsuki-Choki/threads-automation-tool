@@ -50,10 +50,9 @@ function initializeScheduledPostsSheet() {
     '予定時刻',
     'ステータス',
     '投稿URL',
-    'エラー',
-    'リトライ',
     'ツリーID',
     '投稿順序',
+    '動画URL',
     '画像URL_1枚目',
     '画像URL_2枚目',
     '画像URL_3枚目',
@@ -63,7 +62,8 @@ function initializeScheduledPostsSheet() {
     '画像URL_7枚目',
     '画像URL_8枚目',
     '画像URL_9枚目',
-    '画像URL_10枚目'
+    '画像URL_10枚目',
+    'エラー'
   ];
   
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -81,24 +81,24 @@ function initializeScheduledPostsSheet() {
   const futureDate3 = new Date(now.getFullYear() + 100, now.getMonth(), now.getDate() + 7);
   
   const sampleData = [
-    [1, '【サンプル投稿1】\\nこれはテスト投稿です。\\n#threads #自動投稿', 
+    [1, '【サンプル投稿1】\nこれはテスト投稿です。\n#threads #自動投稿', 
      Utilities.formatDate(futureDate, 'JST', 'yyyy/MM/dd'), '10:00',
-     '投稿予約中', '', '', 0, '', '', '', '', '', '', '', '', '', '', '', ''],
-    [2, '【サンプル投稿2】\\n画像付き投稿のサンプルです。\\n画像URLを右側の列に入力してください。', 
+     '投稿予約中', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    [2, '【サンプル投稿2】\n画像付き投稿のサンプルです。\n画像URLを右側の列に入力してください。', 
      Utilities.formatDate(futureDate2, 'JST', 'yyyy/MM/dd'), '15:00',
-     '投稿予約中', '', '', 0, '', '', 'https://example.com/image1.jpg', '', '', '', '', '', '', '', '', ''],
-    [3, '【サンプル投稿3】\\n複数画像の投稿サンプル', 
+     '投稿予約中', '', '', '', '', 'https://example.com/image1.jpg', '', '', '', '', '', '', '', '', '', ''],
+    [3, '【サンプル投稿3】\n複数画像の投稿サンプル', 
      Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '12:00',
-     '投稿予約中', '', '', 0, '', '', 'https://example.com/image1.jpg', 'https://example.com/image2.jpg', '', '', '', '', '', '', '', ''],
-    [4, '【ツリー投稿サンプル1-1】\\nこれがツリーの最初の投稿です。',
+     '投稿予約中', '', '', '', '', 'https://example.com/image1.jpg', 'https://example.com/image2.jpg', '', '', '', '', '', '', '', '', ''],
+    [4, '【ツリー投稿サンプル1-1】\nこれがツリーの最初の投稿です。',
      Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
-     '投稿予約中', '', '', 0, 'thread_A', '1', '', '', '', '', '', '', '', '', '', ''],
-    [5, '【ツリー投稿サンプル1-2】\\nこれが2番目の投稿。最初の投稿への返信になります。',
+     '投稿予約中', '', 'thread_A', '1', '', '', '', '', '', '', '', '', '', '', '', ''],
+    [5, '【ツリー投稿サンプル1-2】\nこれが2番目の投稿。最初の投稿への返信になります。',
      Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
-     '投稿予約中', '', '', 0, 'thread_A', '2', '', '', '', '', '', '', '', '', '', ''],
-    [6, '【ツリー投稿サンプル1-3】\\nそして3番目。ツリーの最後です。',
+     '投稿予約中', '', 'thread_A', '2', '', '', '', '', '', '', '', '', '', '', '', ''],
+    [6, '【ツリー投稿サンプル1-3】\nそして3番目。ツリーの最後です。',
      Utilities.formatDate(futureDate3, 'JST', 'yyyy/MM/dd'), '18:00',
-     '投稿予約中', '', '', 0, 'thread_A', '3', '', '', '', '', '', '', '', '', '', '']
+     '投稿予約中', '', 'thread_A', '3', '', '', '', '', '', '', '', '', '', '', '', '']
   ];
   
   sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
@@ -110,15 +110,16 @@ function initializeScheduledPostsSheet() {
   sheet.setColumnWidth(4, 80);   // 予定時刻
   sheet.setColumnWidth(5, 100);  // ステータス
   sheet.setColumnWidth(6, 300);  // 投稿URL
-  sheet.setColumnWidth(7, 200);  // エラー
-  sheet.setColumnWidth(8, 80);   // リトライ
-  sheet.setColumnWidth(9, 100);  // ツリーID
-  sheet.setColumnWidth(10, 80);  // 投稿順序
+  sheet.setColumnWidth(7, 100);  // ツリーID
+  sheet.setColumnWidth(8, 80);   // 投稿順序
+  sheet.setColumnWidth(9, 200);  // 動画URL
   
   // 画像URL列の幅
-  for (let i = 11; i <= 20; i++) {
+  for (let i = 10; i <= 19; i++) {
     sheet.setColumnWidth(i, 200);
   }
+  
+  sheet.setColumnWidth(20, 300);  // エラー
   
   // データ検証を追加
   // ステータス列
@@ -159,23 +160,26 @@ function initializeScheduledPostsSheet() {
   sheet.getRange('A1').setNote(
     '予約投稿の設定シート\\n\\n' +
     'ID: 一意の識別番号\\n' +
-    '投稿内容: Threadsに投稿するテキスト（改行は\\\\nで入力）\\n' +
+    '投稿内容: Threadsに投稿するテキスト\\n' +
     '予定日付: 投稿する日付（yyyy/mm/dd形式）\\n' +
     '予定時刻: 投稿する時刻（24時間表記、例: 13:30）\\n' +
     'ステータス: 投稿予約中、投稿済、失敗、キャンセル\\n' +
     '投稿URL: 投稿後のURL（自動入力）\\n' +
-    'エラー: エラーメッセージ（自動入力）\\n' +
-    'リトライ: 再試行回数（自動入力）\\n' +
     'ツリーID: 同じツリーにする投稿に共通のIDを入力（例: thread_A）\\n' +
     '投稿順序: ツリー内での投稿順番（1, 2, 3...）\\n' +
-    '画像URL: 投稿に添付する画像のURL（最大10枚）'
+    '動画URL: 投稿に添付する動画のURL\\n' +
+    '画像URL: 投稿に添付する画像のURL（最大10枚）\\n' +
+    'エラー: エラーメッセージ（自動入力）'
   );
   
   // ツリーID列のヘルプテキスト
-  sheet.getRange('I1').setNote('同じツリー（スレッド）として投稿したい複数の行に、共通のIDを入力してください');
+  sheet.getRange('G1').setNote('同じツリー（スレッド）として投稿したい複数の行に、共通のIDを入力してください');
   
   // 投稿順序列のヘルプテキスト
-  sheet.getRange('J1').setNote('ツリー内での投稿順序を数値で指定（1が最初の投稿）');
+  sheet.getRange('H1').setNote('ツリー内での投稿順序を数値で指定（1が最初の投稿）');
+  
+  // 動画URL列のヘルプテキスト
+  sheet.getRange('I1').setNote('動画ファイルのURLを入力してください（Google DriveのURLも可）');
   
   // 条件付き書式を追加（ステータスの視覚化）
   const statusRange = sheet.getRange(2, 5, 1000, 1);
@@ -300,8 +304,19 @@ function getScheduledPosts() {
   console.log(`現在時刻（JST）: ${Utilities.formatDate(now, 'JST', 'yyyy/MM/dd HH:mm:ss')}`);
   
   for (let i = 1; i < data.length; i++) {
-    // 新しい列構造: ID, 投稿内容, 予定日付, 予定時刻, ステータス, 投稿URL, エラー, リトライ, ツリーID, 投稿順序, 画像URL_1枚目〜10枚目
-    const [id, content, scheduledDate, scheduledTime, status, postedUrl, error, retryCount, treeId, postOrder, ...imageUrls] = data[i];
+    // 新しい列構造: ID(1), 投稿内容(2), 予定日付(3), 予定時刻(4), ステータス(5), 投稿URL(6), ツリーID(7), 投稿順序(8), 動画URL(9), 画像URL_1枚目〜10枚目(10-19), エラー(20)
+    const row = data[i];
+    const id = row[0];
+    const content = row[1];
+    const scheduledDate = row[2];
+    const scheduledTime = row[3];
+    const status = row[4];
+    const postedUrl = row[5];
+    const treeId = row[6];
+    const postOrder = row[7];
+    const videoUrl = row[8];
+    const imageUrls = row.slice(9, 19); // 画像URL_1枚目〜10枚目
+    const error = row[19];
     
     // デバッグ: 生データを出力
     console.log(`行${i + 1} 生データ: ID=${id}, 日付=${scheduledDate}, 時刻=${scheduledTime}, ステータス="${status}"`);
@@ -354,15 +369,16 @@ function getScheduledPosts() {
       
       if (isPastDue) {
         // 空でない画像URLのみを収集（最大10枚）
-        const validImageUrls = imageUrls.slice(0, 10).filter(url => url && url.trim() !== '');
+        const validImageUrls = imageUrls.filter(url => url && url.trim() !== '');
         
         posts.push({
           row: i + 1,
           id: id,
           content: content,
           imageUrls: validImageUrls,
+          videoUrl: videoUrl || '',
           scheduledTime: scheduledDateTime,
-          retryCount: retryCount || 0,
+          retryCount: 0, // リトライ列は削除したため常に0
           treeId: treeId || '',
           postOrder: postOrder || 0
         });
@@ -505,7 +521,10 @@ function processPost(post) {
     }
   } else {
     // 通常の投稿（返信ではない）
-    if (post.imageUrls && post.imageUrls.length > 0) {
+    if (post.videoUrl && post.videoUrl.trim() !== '') {
+      // 動画付き投稿
+      result = postWithVideo(post.content, post.videoUrl);
+    } else if (post.imageUrls && post.imageUrls.length > 0) {
       // 画像付き投稿（複数画像対応）
       if (post.imageUrls.length === 1) {
         // 1枚の場合は従来の関数を使用
@@ -647,6 +666,72 @@ function postWithImage(text, imageUrl) {
     }
     
   } catch (error) {
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===========================
+// 動画付き投稿
+// ===========================
+function postWithVideo(text, videoUrl) {
+  const accessToken = getConfig('ACCESS_TOKEN');
+  const userId = getConfig('USER_ID');
+  
+  if (!accessToken || !userId) {
+    return { success: false, error: '認証情報が見つかりません' };
+  }
+  
+  try {
+    // Google DriveのURLを公開URLに変換
+    const publicVideoUrl = convertToPublicUrl(videoUrl);
+    
+    console.log('動画投稿作成中...');
+    console.log(`  動画URL: ${publicVideoUrl}`);
+    console.log(`  テキスト: ${text || 'なし'}`);
+    
+    // メディアコンテナの作成
+    const createUrl = `${THREADS_API_BASE}/v1.0/${userId}/threads`;
+    const createParams = {
+      'media_type': 'VIDEO',
+      'video_url': publicVideoUrl,
+      'text': text || ''
+    };
+    
+    console.log('API呼び出しURL:', createUrl);
+    console.log('パラメータ:', JSON.stringify(createParams));
+    
+    const createResponse = UrlFetchApp.fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      payload: Object.keys(createParams).map(key => 
+        `${key}=${encodeURIComponent(createParams[key])}`
+      ).join('&'),
+      muteHttpExceptions: true
+    });
+    
+    const createResult = JSON.parse(createResponse.getContentText());
+    console.log('メディアコンテナ作成レスポンス:', JSON.stringify(createResult));
+    
+    if (createResult.id) {
+      // 動画処理のため長めに待機
+      console.log('動画処理待機中（15秒）...');
+      Utilities.sleep(15000);
+      
+      // 投稿の公開
+      return publishPost(createResult.id);
+    } else {
+      const errorMessage = createResult.error?.message || 
+                         createResult.error?.error_user_msg || 
+                         'ビデオコンテナ作成失敗';
+      console.error('動画投稿エラー:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
+    
+  } catch (error) {
+    console.error('動画投稿例外:', error);
     return { success: false, error: error.toString() };
   }
 }
@@ -934,7 +1019,7 @@ function convertToPublicUrl(url) {
 function updatePostStatus(row, status, postUrl, error, retryCount) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('予約投稿');
   
-  // 新しい列構造に合わせて調整: ID(1), 投稿内容(2), 予定日付(3), 予定時刻(4), ステータス(5), 投稿URL(6), エラー(7), リトライ(8)
+  // 新しい列構造: ID(1), 投稿内容(2), 予定日付(3), 予定時刻(4), ステータス(5), 投稿URL(6), ツリーID(7), 投稿順序(8), 動画URL(9), 画像URL_1枚目〜10枚目(10-19), エラー(20)
   
   // ステータスを日本語に変換
   const statusMap = {
@@ -955,17 +1040,14 @@ function updatePostStatus(row, status, postUrl, error, retryCount) {
     sheet.getRange(row, 6).setValue(postUrl);
   }
   
-  // エラー更新（列7）
+  // エラー更新（列20 - 最右端）
   if (error) {
-    sheet.getRange(row, 7).setValue(error);
+    sheet.getRange(row, 20).setValue(error);
   } else {
-    sheet.getRange(row, 7).setValue('');
+    sheet.getRange(row, 20).setValue('');
   }
   
-  // リトライ回数更新（列8）
-  if (retryCount !== undefined) {
-    sheet.getRange(row, 8).setValue(retryCount);
-  }
+  // リトライ回数の更新は削除（リトライ列を削除したため）
 }
 
 // ===========================
