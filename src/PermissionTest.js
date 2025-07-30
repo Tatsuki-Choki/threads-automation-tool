@@ -19,7 +19,7 @@ function testRepliesPermissionDetailed() {
   const threadsUrl = `${THREADS_API_BASE}/v1.0/${config.userId}/threads`;
   
   try {
-    const threadsResponse = UrlFetchApp.fetch(threadsUrl + '?fields=id,text,media_type,reply_audience&limit=5', {
+    const threadsResponse = fetchWithTracking(threadsUrl + '?fields=id,text,media_type,reply_audience&limit=5', {
       headers: { 'Authorization': `Bearer ${config.accessToken}` },
       muteHttpExceptions: true
     });
@@ -58,7 +58,7 @@ function testRepliesPermissionDetailed() {
       console.log(`- API URL: ${repliesUrl}`);
       
       try {
-        const repliesResponse = UrlFetchApp.fetch(repliesUrl + '?fields=id,text,username,timestamp,from', {
+        const repliesResponse = fetchWithTracking(repliesUrl + '?fields=id,text,username,timestamp,from', {
           headers: { 'Authorization': `Bearer ${config.accessToken}` },
           muteHttpExceptions: true
         });
@@ -207,7 +207,7 @@ function checkAccessTokenInfo() {
     // トークンデバッグ情報を取得
     const debugUrl = `https://graph.facebook.com/debug_token?input_token=${config.accessToken}&access_token=${config.accessToken}`;
     
-    const response = UrlFetchApp.fetch(debugUrl, {
+    const response = fetchWithTracking(debugUrl, {
       muteHttpExceptions: true
     });
     

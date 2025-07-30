@@ -50,16 +50,21 @@ function quickSetupWithExistingToken() {
     // 3. トークンの有効期限設定（推定）
     setConfig('TOKEN_EXPIRES', new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString());
     
-    // 4. 基本的なログ記録
+    // 4. スクリプトIDを基本設定に追加
+    const scriptId = ScriptApp.getScriptId();
+    setConfig('SCRIPT_ID', scriptId);
+    
+    // 5. 基本的なログ記録
     logOperation('クイックセットアップ', 'success', `ユーザー: @${userInfo.username}`);
     
-    // 5. デフォルトトリガーの設定
+    // 6. デフォルトトリガーの設定
     const triggerResponse = ui.alert(
       'トリガー設定',
       'デフォルト設定でトリガーを作成しますか？\n\n' +
       '• 予約投稿: 5分ごと\n' +
       '• 返信取得: 30分ごと\n' +
       '• トークン更新: 毎日午前3時\n\n' +
+      '※既存のトリガーは削除され、実行者が新しいトリガーの所有者になります。\n' +
       '（後でメニューから変更可能です）',
       ui.ButtonSet.YES_NO
     );
@@ -69,7 +74,7 @@ function quickSetupWithExistingToken() {
       setupDefaultTriggers();
     }
     
-    // 6. テスト投稿の準備
+    // 7. テスト投稿の準備
     const testResponse = ui.alert(
       'セットアップ完了',
       'セットアップが完了しました！\n\nテスト投稿を実行しますか？',
@@ -91,7 +96,7 @@ function quickSetupWithExistingToken() {
 // ===========================
 function fetchUserInfoFromToken(accessToken) {
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/me?fields=id,username,threads_profile_picture_url`,
       {
         headers: {
@@ -122,7 +127,7 @@ function fetchUserInfoFromToken(accessToken) {
 // ===========================
 function testConnectionAndGetUserInfo(accessToken, userId) {
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}?fields=id,username,threads_profile_picture_url,threads_biography`,
       {
         headers: {
@@ -154,9 +159,17 @@ function setupDefaultTriggers() {
   try {
     // 既存のトリガーを削除
     const triggers = ScriptApp.getProjectTriggers();
+    let deletedCount = 0;
     triggers.forEach(trigger => {
       ScriptApp.deleteTrigger(trigger);
+      deletedCount++;
     });
+    
+    if (deletedCount > 0) {
+      const ui = SpreadsheetApp.getUi();
+      const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      activeSpreadsheet.toast(`${deletedCount}個の既存トリガーを削除しました。`, 'トリガー削除', 3);
+    }
     
     // デフォルト値
     const postInterval = 5;    // 5分
@@ -280,7 +293,7 @@ function debugGetUserPosts() {
   }
   
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads?fields=id,text,timestamp,media_type,media_url&limit=5`,
       {
         headers: {
@@ -401,4 +414,39 @@ function generateSampleData() {
     ui.alert('エラー', `サンプルデータの生成中にエラーが発生しました：\n${error.toString()}`, ui.ButtonSet.OK);
     logError('generateSampleData', error);
   }
+}
+
+// ===========================
+// リプライ取得トリガーの再設定（所有者変更のため）
+// ===========================
+function showRepliesTrackingTriggerDialog() {
+  // 1. 既存のリプライ取得関連トリガーを削除する
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    const allTriggers = ScriptApp.getProjectTriggers();
+    let deletedCount = 0;
+    for (const trigger of allTriggers) {
+      // 'fetchAndSaveReplies' または 'fetchAndAutoReply' を対象とする
+      if (trigger.getHandlerFunction() === 'fetchAndSaveReplies' || trigger.getHandlerFunction() === 'fetchAndAutoReply') {
+        ScriptApp.deleteTrigger(trigger);
+        deletedCount++;
+      }
+    }
+    if (deletedCount > 0) {
+      activeSpreadsheet.toast(`${deletedCount}個の既存リプライ取得トリガーを削除しました。`, 'トリガー削除', 3);
+    } else {
+      activeSpreadsheet.toast('削除対象のトリガーはありませんでした。', 'トリガー確認', 3);
+    }
+  } catch (e) {
+    Logger.log(`トリガーの削除中にエラーが発生しました: ${e}`);
+    activeSpreadsheet.toast('トリガーの削除中にエラーが発生しました。', 'エラー', 3);
+    // エラーが発生しても処理を続行する
+  }
+
+  // 2. 新しいトリガー設定ダイアログを表示する
+  // この操作を行ったユーザーが新しいトリガーの所有者になる
+  const html = HtmlService.createHtmlOutputFromFile('TriggerDialog')
+      .setWidth(400)
+      .setHeight(300);
+  SpreadsheetApp.getUi().showModalDialog(html, 'リプライ取得トリガーを再設定');
 }

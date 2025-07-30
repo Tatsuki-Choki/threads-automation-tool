@@ -312,7 +312,7 @@ function getParentPostId(replyId, config) {
       fields: 'parent_id,root_post,replied_to'
     };
     
-    const response = UrlFetchApp.fetch(url + '?' + buildQueryString(params), {
+    const response = fetchWithTracking(url + '?' + buildQueryString(params), {
       headers: {
         'Authorization': `Bearer ${config.accessToken}`
       },
@@ -450,7 +450,7 @@ function getLatestDeploymentId() {
     const token = ScriptApp.getOAuthToken();
     
     const url = `https://script.googleapis.com/v1/projects/${scriptId}/deployments`;
-    const response = UrlFetchApp.fetch(url, {
+    const response = fetchWithTracking(url, {
       headers: {
         'Authorization': `Bearer ${token}`
       },
@@ -495,4 +495,105 @@ function showWebhookSettings() {
     `※ APP_SECRETは設定シートに保存してください`;
   
   ui.alert('Webhook設定情報', message, ui.ButtonSet.OK);
+}
+
+// ===========================
+// UrlFetchApp呼び出しトラッキング
+// ===========================
+
+/**
+ * UrlFetchApp.fetchのラッパー関数。呼び出し回数をカウントする。
+ * @param {string} url 取得するURL
+ * @param {object} params UrlFetchApp.fetchに渡すパラメータ
+ * @return {GoogleAppsScript.URL_Fetch.HTTPResponse} UrlFetchApp.fetchのレスポンス
+ */
+function fetchWithTracking(url, params) {
+  const properties = PropertiesService.getScriptProperties();
+  const today = new Date().toLocaleDateString('ja-JP');
+  
+  const lastCallDate = properties.getProperty('URL_FETCH_LAST_CALL_DATE');
+  let count = parseInt(properties.getProperty('URL_FETCH_COUNT') || '0', 10);
+  
+  if (lastCallDate !== today) {
+    // 日付が変わっていれば、カウントをリセット
+    count = 1;
+  } else {
+    // 同じ日なら、カウントをインクリメント
+    count++;
+  }
+  
+  properties.setProperty('URL_FETCH_COUNT', count.toString());
+  properties.setProperty('URL_FETCH_LAST_CALL_DATE', today);
+  
+  console.log(`UrlFetchApp call #${count} for today.`);
+  
+  // 元のUrlFetchApp.fetchを実行
+  return UrlFetchApp.fetch(url, params);
+}
+
+/**
+ * 本日のUrlFetchAppの呼び出し回数を取得する
+ * @return {number} 本日の呼び出し回数
+ */
+function getTodaysUrlFetchCount() {
+  const properties = PropertiesService.getScriptProperties();
+  const today = new Date().toLocaleDateString('ja-JP');
+  
+  const lastCallDate = properties.getProperty('URL_FETCH_LAST_CALL_DATE');
+  
+  if (lastCallDate === today) {
+    return parseInt(properties.getProperty('URL_FETCH_COUNT') || '0', 10);
+  } else {
+    // 今日はまだ呼び出しがない
+    return 0;
+  }
+}
+
+/**
+ * （任意）エディタのメニューから手動で回数を確認するための関数
+ */
+function showUrlFetchCount() {
+  const count = getTodaysUrlFetchCount();
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('API呼び出し回数', `本日のUrlFetchApp呼び出し回数: ${count} 回`, ui.ButtonSet.OK);
+}
+
+/**
+ * パスワード認証付きでAPI呼び出し回数を確認する関数
+ */
+function showUrlFetchCountWithAuth() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // パスワード入力を求める
+  const response = ui.prompt(
+    'パスワード確認',
+    '基本設定を表示するためのパスワードを入力してください：',
+    ui.ButtonSet.OK_CANCEL
+  );
+  
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+  
+  const inputPassword = response.getResponseText();
+  const correctPassword = getConfig('ADMIN_PASSWORD') || 'tsukichiyo.inc@gmail.com';
+  
+  if (inputPassword !== correctPassword) {
+    ui.alert('エラー', 'パスワードが正しくありません。', ui.ButtonSet.OK);
+    return;
+  }
+  
+  // パスワードが正しい場合、API呼び出し回数を表示
+  const count = getTodaysUrlFetchCount();
+  const properties = PropertiesService.getScriptProperties();
+  const lastCallDate = properties.getProperty('URL_FETCH_LAST_CALL_DATE') || '未使用';
+  
+  const message = `📊 API呼び出し統計\n\n` +
+    `本日のAPI呼び出し回数: ${count} 回\n` +
+    `最終呼び出し日: ${lastCallDate}\n\n` +
+    `※ Google Apps Scriptの制限:\n` +
+    `- 1日あたり20,000回まで（無料アカウント）\n` +
+    `- 1日あたり100,000回まで（Workspaceアカウント）`;
+  
+  ui.alert('API呼び出し回数', message, ui.ButtonSet.OK);
 }

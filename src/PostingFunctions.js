@@ -573,7 +573,7 @@ function postTextOnly(text) {
     console.log('postTextOnly 開始 - テキスト:', text.substring(0, 50) + '...');
     
     // メディアコンテナの作成
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -636,7 +636,7 @@ function postWithImage(text, imageUrl) {
     const publicImageUrl = convertToPublicUrl(imageUrl);
     
     // メディアコンテナの作成
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -700,7 +700,7 @@ function postWithVideo(text, videoUrl) {
     console.log('API呼び出しURL:', createUrl);
     console.log('パラメータ:', JSON.stringify(createParams));
     
-    const createResponse = UrlFetchApp.fetch(createUrl, {
+    const createResponse = fetchWithTracking(createUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -758,7 +758,7 @@ function postWithMultipleImages(text, imageUrls) {
       text: text
     };
     
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -796,7 +796,7 @@ function publishPost(containerId) {
   const userId = getConfig('USER_ID');
   
   try {
-    const publishResponse = UrlFetchApp.fetch(
+    const publishResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads_publish`,
       {
         method: 'POST',
@@ -842,7 +842,7 @@ function postReplyTextOnly(text, replyToId) {
   
   try {
     // メディアコンテナの作成（返信先IDを指定）
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -890,7 +890,7 @@ function postReplyWithImage(text, imageUrl, replyToId) {
     const publicImageUrl = convertToPublicUrl(imageUrl);
     
     // メディアコンテナの作成（返信先IDを指定）
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -948,7 +948,7 @@ function postReplyWithMultipleImages(text, imageUrls, replyToId) {
       reply_to_id: replyToId
     };
     
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -1283,7 +1283,7 @@ function refreshAccessToken() {
   }
   
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       'https://graph.threads.net/oauth/access_token',
       {
         method: 'POST',

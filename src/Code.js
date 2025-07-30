@@ -33,13 +33,16 @@ function onOpen() {
     ui.createMenu('🔒 管理者用')
       .addItem('基本設定を表示', 'showSettingsSheet')
       .addItem('基本設定を非表示', 'hideSettingsSheet')
+      .addSeparator()
+      .addItem('現在のトリガーの所有者を確認', 'checkTriggerOwners')
+      .addItem('API呼び出し回数確認', 'showUrlFetchCountWithAuth')
       .addToUi();
     
     // Threads自動化メニュー
     ui.createMenu('Threads自動化')
     .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
     .addSeparator()
-    .addItem('⏰ トリガー設定', 'setupTriggers')
+    .addItem('⏰ トリガーを再設定', 'showRepliesTrackingTriggerDialog')
     .addSeparator()
     .addItem('📤 手動投稿実行', 'manualPostExecution')
     .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
@@ -303,7 +306,7 @@ function exchangeCodeForToken(authCode) {
   };
   
   try {
-    const response = UrlFetchApp.fetch(tokenUrl, {
+    const response = fetchWithTracking(tokenUrl, {
       'method': 'POST',
       'payload': payload,
       'muteHttpExceptions': true
@@ -335,7 +338,7 @@ function exchangeForLongLivedToken(shortLivedToken) {
   };
   
   try {
-    const response = UrlFetchApp.fetch(exchangeUrl, {
+    const response = fetchWithTracking(exchangeUrl, {
       'method': 'POST',
       'payload': payload
     });
@@ -575,7 +578,7 @@ function showLogStats() {
 // ===========================
 function getUserInfo(accessToken) {
   try {
-    const response = UrlFetchApp.fetch(`${THREADS_API_BASE}/v1.0/me?fields=id,username,threads_profile_picture_url`, {
+    const response = fetchWithTracking(`${THREADS_API_BASE}/v1.0/me?fields=id,username,threads_profile_picture_url`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }
@@ -656,7 +659,8 @@ function initializeSettingsSheet() {
     ['USER_ID', '', '（自動入力）ThreadsユーザーID'],
     ['USERNAME', '', '（自動入力）Threadsユーザー名'],
     ['TOKEN_EXPIRES', '', '（自動入力）トークン有効期限'],
-    ['REDIRECT_URI', 'https://script.google.com/a/macros/tsukichiyo.jp/s/AKfycbwZQCRvj97_y_fAUTlWKvC3EsDCoyDRaQT0tALUKK2ZvQXSNr-fFimDPnkFD_N6yimi/exec', 'OAuth認証のリダイレクトURI（Google Apps ScriptのURL）この値は固定で自動的に入ります']
+    ['REDIRECT_URI', 'https://script.google.com/a/macros/tsukichiyo.jp/s/AKfycbwZQCRvj97_y_fAUTlWKvC3EsDCoyDRaQT0tALUKK2ZvQXSNr-fFimDPnkFD_N6yimi/exec', 'OAuth認証のリダイレクトURI（Google Apps ScriptのURL）この値は固定で自動的に入ります'],
+    ['SCRIPT_ID', '', '（自動入力）このスプレッドシートのスクリプトID']
   ];
   
   sheet.getRange(2, 1, settings.length, settings[0].length).setValues(settings);
@@ -963,6 +967,79 @@ function initializeSheetProtection() {
     sheet.hideSheet();
     console.log('基本設定シートを初期状態で非表示に設定しました。');
     logOperation('基本設定シート保護初期化', 'success', '初期状態で非表示に設定');
+  }
+}
+
+// ===========================
+// トリガー所有者確認機能
+// ===========================
+function checkTriggerOwners() {
+  // パスワード確認
+  if (!verifyPassword('トリガー所有者確認')) {
+    return;
+  }
+  
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    
+    if (triggers.length === 0) {
+      ui.alert('トリガー情報', '現在設定されているトリガーはありません。', ui.ButtonSet.OK);
+      return;
+    }
+    
+    // トリガー情報を整理
+    let triggerInfo = '📋 現在のトリガー所有者情報\n\n';
+    const triggersByOwner = {};
+    
+    triggers.forEach((trigger, index) => {
+      const handlerFunction = trigger.getHandlerFunction();
+      const triggerSource = trigger.getTriggerSource();
+      const eventType = trigger.getEventType();
+      
+      // トリガー所有者の取得（メールアドレス）
+      let ownerEmail = 'unknown';
+      try {
+        // トリガーのユニークIDから所有者を推定
+        ownerEmail = trigger.getUniqueId();
+        // より詳細な情報が必要な場合は、Session.getActiveUser()等を検討
+      } catch (e) {
+        ownerEmail = '取得不可';
+      }
+      
+      // トリガータイプの判定
+      let triggerType = '';
+      if (triggerSource.toString() === 'SPREADSHEETS') {
+        triggerType = 'スプレッドシート';
+      } else if (triggerSource.toString() === 'CLOCK') {
+        triggerType = '時間ベース';
+      }
+      
+      triggerInfo += `【トリガー ${index + 1}】\n`;
+      triggerInfo += `  関数: ${handlerFunction}\n`;
+      triggerInfo += `  タイプ: ${triggerType}\n`;
+      triggerInfo += `  イベント: ${eventType}\n`;
+      triggerInfo += `  ユニークID: ${trigger.getUniqueId()}\n`;
+      triggerInfo += '\n';
+    });
+    
+    // 現在のユーザー情報も追加
+    triggerInfo += '━━━━━━━━━━━━━━━━━━\n';
+    triggerInfo += '💡 トリガー所有者について:\n';
+    triggerInfo += '• トリガーは作成したユーザーが所有者となります\n';
+    triggerInfo += '• UrlFetchAppの実行はトリガー所有者のクォータを消費します\n';
+    triggerInfo += '• 「トリガーを再設定」で所有者を変更できます\n';
+    
+    // アラートで表示
+    ui.alert('トリガー所有者情報', triggerInfo, ui.ButtonSet.OK);
+    
+    // ログに記録
+    logOperation('トリガー所有者確認', 'success', `${triggers.length}個のトリガーを確認`);
+    
+  } catch (error) {
+    ui.alert('エラー', 'トリガー情報の取得中にエラーが発生しました:\n' + error.toString(), ui.ButtonSet.OK);
+    logError('checkTriggerOwners', error);
   }
 }
 

@@ -140,7 +140,7 @@ function getMyRecentPosts(limit = 25) {
   try {
     console.log(`getMyRecentPosts: ${limit}件の投稿を取得中...`);
     
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads?fields=id,text,timestamp,media_type,media_url,permalink&limit=${limit}`,
       {
         headers: {
@@ -186,7 +186,7 @@ function fetchRepliesForPostAndAutoReply(post, lastCheckTime) {
   
   try {
     // 簡素化されたフィールドのみ取得
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${post.id}/replies?fields=id,text,username,timestamp,from`,
       {
         headers: {
@@ -266,7 +266,7 @@ function fetchRepliesForPost(post) {
   
   try {
     // 簡素化されたフィールドのみ取得
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${post.id}/replies?fields=id,text,username,timestamp,from`,
       {
         headers: {
@@ -628,7 +628,7 @@ function debugFetchReplies() {
     
     // 3. その投稿のリプライを取得
     console.log('リプライを取得中...');
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${post.id}/replies?fields=id,text,timestamp,username,replied_to,is_reply`,
       {
         headers: {

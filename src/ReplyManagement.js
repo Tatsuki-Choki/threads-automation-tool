@@ -75,7 +75,7 @@ function getMyThreadsPosts(config, limit = 25) {
     
     console.log(`投稿を取得中: ${url}`);
     
-    const response = UrlFetchApp.fetch(url + '?' + buildQueryString(params), {
+    const response = fetchWithTracking(url + '?' + buildQueryString(params), {
       headers: {
         'Authorization': `Bearer ${config.accessToken}`
       },
@@ -160,7 +160,7 @@ function getAllReplies(postId, config) {
       
       console.log(`リクエストURL: ${url}?${buildQueryString(params)}`);
       
-      const response = UrlFetchApp.fetch(url + '?' + buildQueryString(params), {
+      const response = fetchWithTracking(url + '?' + buildQueryString(params), {
         headers: {
           'Authorization': `Bearer ${config.accessToken}`
         },
@@ -381,7 +381,7 @@ function sendAutoReply(replyId, reply, keyword, config) {
     
     // 返信作成
     const createUrl = `${THREADS_API_BASE}/v1.0/${config.userId}/threads`;
-    const createResponse = UrlFetchApp.fetch(createUrl, {
+    const createResponse = fetchWithTracking(createUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${config.accessToken}`,
@@ -407,7 +407,7 @@ function sendAutoReply(replyId, reply, keyword, config) {
     
     // 返信公開
     const publishUrl = `${THREADS_API_BASE}/v1.0/${config.userId}/threads_publish`;
-    const publishResponse = UrlFetchApp.fetch(publishUrl, {
+    const publishResponse = fetchWithTracking(publishUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${config.accessToken}`,

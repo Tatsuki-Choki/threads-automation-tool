@@ -67,7 +67,7 @@ function getRecentPosts() {
   }
   
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads?fields=id,text,timestamp&limit=25`,
       {
         headers: {
@@ -99,7 +99,7 @@ function checkPostComments(postId, lastCheckTime) {
   let repliesCount = 0;
   
   try {
-    const response = UrlFetchApp.fetch(
+    const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${postId}/replies?fields=id,text,username,timestamp,from`,
       {
         headers: {
@@ -308,7 +308,7 @@ function sendAutoReply(comment, replyToId) {
     // replyText = '[自動返信] ' + replyText;
     
     // 返信の作成
-    const createResponse = UrlFetchApp.fetch(
+    const createResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
@@ -329,7 +329,7 @@ function sendAutoReply(comment, replyToId) {
     
     if (createResult.id) {
       // 返信の公開
-      const publishResponse = UrlFetchApp.fetch(
+      const publishResponse = fetchWithTracking(
         `${THREADS_API_BASE}/v1.0/${userId}/threads_publish`,
         {
           method: 'POST',
