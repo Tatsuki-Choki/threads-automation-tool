@@ -23,6 +23,53 @@ function testFunction() {
 }
 
 // ===========================
+// 設定テスト関数
+// ===========================
+function testConfiguration() {
+  const ui = SpreadsheetApp.getUi();
+  const results = [];
+
+  try {
+    // 基本設定のテスト
+    const clientId = getConfig('CLIENT_ID');
+    const clientSecret = getConfig('CLIENT_SECRET');
+    const accessToken = getConfig('ACCESS_TOKEN');
+    const userId = getConfig('USER_ID');
+
+    results.push(`CLIENT_ID: ${clientId ? '設定済み' : '未設定'}`);
+    results.push(`CLIENT_SECRET: ${clientSecret ? '設定済み' : '未設定'}`);
+    results.push(`ACCESS_TOKEN: ${accessToken ? '設定済み' : '未設定'}`);
+    results.push(`USER_ID: ${userId ? '設定済み' : '未設定'}`);
+
+    // API接続テスト（アクセス可能な場合）
+    if (accessToken && userId) {
+      try {
+        const response = fetchWithTracking(
+          `${THREADS_API_BASE}/v1.0/${userId}?fields=id,username`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        if (response.getResponseCode() === 200) {
+          results.push('API接続: ✅ 正常');
+        } else {
+          results.push(`API接続: ❌ ステータスコード ${response.getResponseCode()}`);
+        }
+      } catch (apiError) {
+        results.push(`API接続: ❌ ${apiError.toString()}`);
+      }
+    } else {
+      results.push('API接続: ⚠️ 認証情報が不完全');
+    }
+
+    // 結果表示
+    const message = '設定テスト結果:\n\n' + results.join('\n');
+    ui.alert('設定テスト', message, ui.ButtonSet.OK);
+
+  } catch (error) {
+    ui.alert('テストエラー', `設定テスト中にエラーが発生しました:\n${error.toString()}`, ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
 // 初期設定関数
 // ===========================
 function onOpen() {
@@ -49,6 +96,7 @@ function onOpen() {
     .addItem('🔄 自動返信のみ', 'manualAutoReply')
     .addSeparator()
     .addItem('🧪 自動返信テスト', 'simulateAutoReply')
+    .addItem('🧪 設定テスト', 'testConfiguration')
     .addSeparator()
     .addSubMenu(ui.createMenu('📁 シート再構成')
       .addItem('💬 受信したリプライシート初期化', 'initializeRepliesSheet')
@@ -89,41 +137,90 @@ function onOpen() {
 // ===========================
 function getConfig(key) {
   try {
+    // まず基本設定シートから取得を試みる
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
     if (!sheet) {
-      console.error('getConfig: Settingsシートが見つかりません');
+      console.error('getConfig: 基本設定シートが見つかりません');
       return null;
     }
-    
+
     const data = sheet.getDataRange().getValues();
-    
+
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] === key) {
-        return data[i][1];
+        const value = data[i][1];
+        // 値が存在し、空でない場合は返す
+        if (value && value !== '' && value !== '（後で入力）') {
+          // 「設定済み」と表示されている場合は、Script Propertiesから取得を試みる
+          if (value === '設定済み') {
+            const scriptValue = PropertiesService.getScriptProperties().getProperty(key);
+            if (scriptValue) {
+              console.log(`機密情報 ${key} を Script Properties から取得しました`);
+              return scriptValue;
+            }
+            console.log(`getConfig: キー「${key}」は設定済みですが、値を取得できません`);
+            return null;
+          }
+          return value;
+        }
       }
     }
-    
+
+    // シートに見つからない場合、機密情報の場合はScript Propertiesも確認
+    const sensitiveKeys = ['ACCESS_TOKEN', 'CLIENT_SECRET', 'APP_SECRET', 'WEBHOOK_VERIFY_TOKEN'];
+    if (sensitiveKeys.includes(key)) {
+      const value = PropertiesService.getScriptProperties().getProperty(key);
+      if (value) {
+        console.log(`機密情報 ${key} を Script Properties から取得しました`);
+        return value;
+      }
+    }
+
     console.log(`getConfig: キー「${key}」が見つかりません`);
     return null;
   } catch (error) {
     console.error(`getConfig エラー: ${error.toString()}`);
+    logError('getConfig', error);
     return null;
   }
 }
 
 function setConfig(key, value) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
-  const data = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === key) {
-      sheet.getRange(i + 1, 2).setValue(value);
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('基本設定');
+    if (!sheet) {
+      console.error('setConfig: 基本設定シートが見つかりません');
       return;
     }
+
+    const data = sheet.getDataRange().getValues();
+
+    // まず基本設定シートに値を保存
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === key) {
+        sheet.getRange(i + 1, 2).setValue(value);
+        found = true;
+        break;
+      }
+    }
+
+    // 新しい設定項目の追加
+    if (!found) {
+      sheet.appendRow([key, value, '']);
+    }
+
+    // 機密情報は追加でScript Propertiesにも保存（二重保存）
+    const sensitiveKeys = ['ACCESS_TOKEN', 'CLIENT_SECRET', 'APP_SECRET'];
+    if (sensitiveKeys.includes(key) && value) {
+      PropertiesService.getScriptProperties().setProperty(key, value);
+      console.log(`機密情報 ${key} を Script Properties にも保存しました`);
+    }
+
+  } catch (error) {
+    console.error(`setConfig エラー: ${error.toString()}`);
+    logError('setConfig', error);
   }
-  
-  // 新しい設定項目の追加
-  sheet.appendRow([key, value, '']);
 }
 
 // ===========================
@@ -471,18 +568,39 @@ function logOperation(operation, status, details) {
   }
 }
 
-function logError(functionName, error) {
-  console.error(`Error in ${functionName}:`, error);
-  logOperation(functionName, 'error', error.toString());
-  
-  // エラー通知
-  const email = getConfig('NOTIFICATION_EMAIL');
-  if (email && getConfig('ENVIRONMENT') === 'production') {
-    MailApp.sendEmail({
-      to: email,
-      subject: 'Threads自動化ツール エラー通知',
-      body: `関数: ${functionName}\nエラー: ${error.toString()}\n時刻: ${new Date()}`
-    });
+function logError(functionName, error, context = {}) {
+  try {
+    // LoggingUtilities.jsのlogError関数を使用（より高度なログ機能）
+    if (typeof logError === 'function' && logError !== arguments.callee) {
+      logError(functionName, error, context);
+    } else {
+      // フォールバック：シンプルなログ
+      console.error(`Error in ${functionName}:`, error);
+      logOperation(functionName, 'error', error.toString());
+    }
+
+    // エラー通知（本番環境のみ）
+    const email = getConfig('NOTIFICATION_EMAIL');
+    const environment = getConfig('ENVIRONMENT');
+
+    if (email && environment === 'production') {
+      const subject = 'Threads自動化ツール エラー通知';
+      const body = `関数: ${functionName}\nエラー: ${error.toString()}\n時刻: ${new Date()}\n\n詳細:\n${JSON.stringify(context, null, 2)}`;
+
+      try {
+        MailApp.sendEmail({
+          to: email,
+          subject: subject,
+          body: body
+        });
+        console.log('エラー通知メールを送信しました');
+      } catch (mailError) {
+        console.error('エラー通知メール送信失敗:', mailError);
+      }
+    }
+  } catch (logError) {
+    // ログ記録自体が失敗した場合の最終フォールバック
+    console.error('logError function failed:', logError);
   }
 }
 
@@ -647,8 +765,8 @@ function initializeSettingsSheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // 設定項目のデータ
@@ -683,9 +801,9 @@ function initializeSettingsSheet() {
   );
   
   // 必須項目の背景色を設定
-  sheet.getRange(2, 1, 1, 3).setBackground('#FFF3CD');  // CLIENT_ID
-  sheet.getRange(3, 1, 1, 3).setBackground('#FFF3CD');  // CLIENT_SECRET
-  sheet.getRange(4, 1, 1, 3).setBackground('#FFF3CD');  // ACCESS_TOKEN
+  sheet.getRange(2, 1, 1, 3).setBackground('#F5F5F5');  // CLIENT_ID
+  sheet.getRange(3, 1, 1, 3).setBackground('#F5F5F5');  // CLIENT_SECRET
+  sheet.getRange(4, 1, 1, 3).setBackground('#F5F5F5');  // ACCESS_TOKEN
   
   logOperation('基本設定シート初期化', 'success', 'シートを再構成しました');
 }
@@ -741,8 +859,8 @@ function initializeLogsSheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // 1行目を固定
@@ -762,25 +880,25 @@ function initializeLogsSheet() {
   
   const successRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('success')
-    .setFontColor('#155724')
+    .setFontColor('#333333')
     .setRanges([statusRange])
     .build();
   
   const infoRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('info')
-    .setFontColor('#0C5460')
+    .setFontColor('#666666')
     .setRanges([statusRange])
     .build();
     
   const warningRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('warning')
-    .setFontColor('#856404')
+    .setFontColor('#333333')
     .setRanges([statusRange])
     .build();
     
   const errorRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('error')
-    .setFontColor('#721C24')
+    .setFontColor('#FF0000')
     .setRanges([statusRange])
     .build();
   
@@ -840,7 +958,7 @@ function resetAllSheets() {
       initializeRepliesSheet();
       SpreadsheetApp.flush();
       
-      initializeキーワード設定Sheet();
+      initializeKeywordSettingsSheet();
       SpreadsheetApp.flush();
       
       initializeReplyHistorySheet();
@@ -895,12 +1013,20 @@ function freezeExistingSheetHeaders() {
 // ===========================
 // シート保護機能
 // ===========================
-// パスワード定数
-const SHEET_PROTECTION_PASSWORD = 'tsukichiyo.inc@gmail.com';
+// パスワード定数（Script Propertiesから取得）
+const SHEET_PROTECTION_PASSWORD = PropertiesService.getScriptProperties().getProperty('SHEET_PROTECTION_PASSWORD') || null;
 
 // 共通のパスワード確認関数
 function verifyPassword(promptTitle) {
   const ui = SpreadsheetApp.getUi();
+
+  // パスワードが設定されていない場合のチェック
+  if (!SHEET_PROTECTION_PASSWORD) {
+    ui.alert('エラー', '管理パスワードが設定されていません。\n\n' +
+      'Script Propertiesに「SHEET_PROTECTION_PASSWORD」を設定してください。', ui.ButtonSet.OK);
+    return false;
+  }
+
   const passwordPrompt = ui.prompt(
     promptTitle || 'パスワード入力',
     'パスワードを入力してください',
@@ -912,12 +1038,12 @@ function verifyPassword(promptTitle) {
   }
 
   const input = passwordPrompt.getResponseText();
-  
+
   if (input !== SHEET_PROTECTION_PASSWORD) {
     ui.alert('エラー', 'パスワードが違います。', ui.ButtonSet.OK);
     return false;
   }
-  
+
   return true;
 }
 

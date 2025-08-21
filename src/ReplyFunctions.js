@@ -449,7 +449,7 @@ function resetAutoReplyKeywordsSheet() {
   
   if (response == ui.Button.YES) {
     try {
-      initializeキーワード設定Sheet();
+      initializeKeywordSettingsSheet();
       ui.alert('キーワード設定シートを再構成しました。\n\n' +
         'サンプルキーワードが追加されています。\n' +
         '必要に応じて編集してください。');
@@ -463,7 +463,7 @@ function resetAutoReplyKeywordsSheet() {
 // ===========================
 // キーワード設定シート初期化
 // ===========================
-function initializeキーワード設定Sheet() {
+function initializeKeywordSettingsSheet() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   
   // 既存のシートを削除
@@ -490,8 +490,8 @@ function initializeキーワード設定Sheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // サンプルデータを追加
@@ -549,15 +549,15 @@ function initializeキーワード設定Sheet() {
   const enabledRange = sheet.getRange(2, 5, 1000, 1);
   const enabledRule1 = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('TRUE')
-    .setBackground('#D7EFDF')
-    .setFontColor('#0D7D2D')
+    .setBackground('#FFFFFF')
+    .setFontColor('#000000')
     .setRanges([enabledRange])
     .build();
   
   const enabledRule2 = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('FALSE')
-    .setBackground('#FCE8E6')
-    .setFontColor('#CC0000')
+    .setBackground('#F5F5F5')
+    .setFontColor('#FF0000')
     .setRanges([enabledRange])
     .build();
   
@@ -771,8 +771,8 @@ function initializeReplyHistorySheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // 列幅の調整

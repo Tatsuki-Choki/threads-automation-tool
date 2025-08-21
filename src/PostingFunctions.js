@@ -70,8 +70,8 @@ function initializeScheduledPostsSheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // サンプルデータを追加
@@ -186,29 +186,29 @@ function initializeScheduledPostsSheet() {
   
   const pendingRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('投稿予約中')
-    .setBackground('#FFF3CD')
-    .setFontColor('#856404')
+    .setBackground('#F5F5F5')
+    .setFontColor('#333333')
     .setRanges([statusRange])
     .build();
   
   const publishedRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('投稿済')
-    .setBackground('#D4EDDA')
-    .setFontColor('#155724')
+    .setBackground('#FFFFFF')
+    .setFontColor('#000000')
     .setRanges([statusRange])
     .build();
     
   const failedRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('失敗')
-    .setBackground('#F8D7DA')
-    .setFontColor('#721C24')
+    .setBackground('#F5F5F5')
+    .setFontColor('#FF0000')
     .setRanges([statusRange])
     .build();
     
   const cancelledRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('キャンセル')
-    .setBackground('#E7E8EA')
-    .setFontColor('#383D41')
+    .setBackground('#E0E0E0')
+    .setFontColor('#666666')
     .setRanges([statusRange])
     .build();
   
@@ -673,6 +673,143 @@ function postWithImage(text, imageUrl) {
 // ===========================
 // 動画付き投稿
 // ===========================
+// ===========================
+// Drive動画URLの正規化
+// ===========================
+function convertVideoUrl(url) {
+  // Google DriveのURLパターンをチェック
+  const drivePatterns = [
+    { regex: /drive\.google\.com\/file\/d\/([a-zA-Z0-9-_]+)/, type: 'file' },
+    { regex: /drive\.google\.com\/open\?id=([a-zA-Z0-9-_]+)/, type: 'open' },
+    { regex: /docs\.google\.com\/.*\/d\/([a-zA-Z0-9-_]+)/, type: 'docs' }
+  ];
+  
+  for (const pattern of drivePatterns) {
+    const match = url.match(pattern.regex);
+    if (match) {
+      const fileId = match[1];
+      // Cookie/confirm不要の直リンクURLに変換
+      const directUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      console.log(`Drive URL正規化: ${url} → ${directUrl}`);
+      return directUrl;
+    }
+  }
+  
+  // DriveのURLでない場合はそのまま返す
+  return url;
+}
+
+// ===========================
+// 動画URLの事前プローブ（Threads要件チェック）
+// ===========================
+function probeMediaUrlForThreads(url, options = {}) {
+  const { isVideo = true } = options;  // デフォルトをtrueに変更（動画用関数のため）
+  
+  try {
+    console.log(`プローブ開始: ${url}`);
+    
+    // Range requestで最初の1バイトのみ取得（ファイルサイズとContent-Type確認用）
+    const response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 
+        'Range': 'bytes=0-0',
+        'User-Agent': 'Meta-Threads-Media-Probe'
+      },
+      followRedirects: true,
+      muteHttpExceptions: true,
+      validateHttpsCertificates: true
+    });
+    
+    const responseCode = response.getResponseCode();
+    console.log(`HTTPレスポンスコード: ${responseCode}`);
+    
+    // 200 OK または 206 Partial Content が期待される
+    if (!(responseCode === 200 || responseCode === 206)) {
+      return { 
+        isValid: false, 
+        error: `HTTPエラー: ${responseCode}` 
+      };
+    }
+    
+    const headers = response.getHeaders();
+    const contentType = String(headers['Content-Type'] || headers['content-type'] || '').toLowerCase();
+    console.log(`Content-Type: ${contentType}`);
+    
+    // 動画の場合はContent-Typeチェック
+    if (isVideo) {
+      if (!contentType.startsWith('video/')) {
+        // HTMLが返ってきた場合は認証/確認ページの可能性
+        if (contentType.includes('html')) {
+          return { 
+            isValid: false, 
+            error: `公開直リンクではありません（HTML応答）。Driveの共有設定を「リンクを知っている全員」にしてください。` 
+          };
+        }
+        return { 
+          isValid: false, 
+          error: `Content-Typeがvideo/*ではありません: ${contentType}` 
+        };
+      }
+      
+      // サポートされる動画形式のチェック
+      const supportedTypes = ['video/mp4', 'video/quicktime'];
+      if (!supportedTypes.some(type => contentType.includes(type))) {
+        console.warn(`警告: 推奨されない動画形式: ${contentType}`);
+      }
+    }
+    
+    // Content-Lengthチェック（サイズ上限）
+    const contentLengthRaw = headers['Content-Length'] || headers['content-length'] || 
+                            headers['Content-Range'] || headers['content-range'];
+    
+    let contentLength = null;
+    if (contentLengthRaw) {
+      // Content-Rangeの場合: "bytes 0-0/12345" から全体サイズを抽出
+      if (String(contentLengthRaw).includes('/')) {
+        const parts = String(contentLengthRaw).split('/');
+        if (parts.length === 2) {
+          contentLength = parseInt(parts[1], 10);
+        }
+      } else {
+        contentLength = parseInt(contentLengthRaw, 10);
+      }
+    }
+    
+    if (contentLength) {
+      console.log(`ファイルサイズ: ${Math.round(contentLength / 1024 / 1024)}MB`);
+      
+      // サイズ上限チェック（デフォルト50MB）
+      const maxSizeMB = 50;  // 50MB固定
+      const maxSizeBytes = maxSizeMB * 1024 * 1024;
+      
+      if (contentLength > maxSizeBytes) {
+        return { 
+          isValid: false, 
+          error: `ファイルサイズが50MBを超えています: ${Math.round(contentLength / 1024 / 1024)}MB` 
+        };
+      }
+    } else {
+      console.warn('警告: Content-Lengthが取得できませんでした');
+    }
+    
+    // すべてのチェックをパス
+    return { 
+      isValid: true, 
+      contentType: contentType,
+      contentLength: contentLength 
+    };
+    
+  } catch (error) {
+    console.error('プローブエラー:', error);
+    return { 
+      isValid: false, 
+      error: `アクセスエラー: ${error.toString()}` 
+    };
+  }
+}
+
+// ===========================
+
 function postWithVideo(text, videoUrl) {
   const accessToken = getConfig('ACCESS_TOKEN');
   const userId = getConfig('USER_ID');
@@ -682,18 +819,55 @@ function postWithVideo(text, videoUrl) {
   }
   
   try {
-    // Google DriveのURLを公開URLに変換
-    const publicVideoUrl = convertToPublicUrl(videoUrl);
+    // Google DriveのURLを正規化
+    const normalizedUrl = convertVideoUrl(videoUrl);
     
     console.log('動画投稿作成中...');
-    console.log(`  動画URL: ${publicVideoUrl}`);
+    console.log(`  元URL: ${videoUrl}`);
+    console.log(`  正規化URL: ${normalizedUrl}`);
     console.log(`  テキスト: ${text || 'なし'}`);
+    
+    // 動画URLの事前検証
+    console.log('動画URLの検証中...');
+    const probeResult = probeMediaUrlForThreads(normalizedUrl);
+    
+    if (!probeResult.isValid) {
+      console.error('動画URL検証失敗:', probeResult.error);
+      
+      // ユーザーフレンドリーなエラーメッセージ
+      let userMessage = '動画の投稿に失敗しました: ';
+      
+      // probeResult.errorが存在することを確認してから.includes()を使用
+      if (probeResult.error) {
+        if (probeResult.error.includes('50MB')) {
+          userMessage += 'ファイルサイズが50MBを超えています。より小さいファイルを使用してください。';
+        } else if (probeResult.error.includes('Content-Type')) {
+          userMessage += '動画ファイルではないか、形式がサポートされていません。';
+        } else if (probeResult.error.includes('404')) {
+          userMessage += 'ファイルが見つかりません。URLと共有設定を確認してください。';
+        } else if (probeResult.error.includes('403')) {
+          userMessage += 'ファイルへのアクセスが拒否されました。共有設定を確認してください。';
+        } else {
+          userMessage += probeResult.error;
+        }
+      } else {
+        userMessage += '不明なエラーが発生しました。';
+      }
+      
+      return { success: false, error: userMessage };
+    }
+    
+    console.log('動画URL検証成功:');
+    console.log(`  Content-Type: ${probeResult.contentType}`);
+    if (probeResult.contentLength) {
+      console.log(`  ファイルサイズ: ${Math.round(probeResult.contentLength / 1024 / 1024 * 100) / 100} MB`);
+    }
     
     // メディアコンテナの作成
     const createUrl = `${THREADS_API_BASE}/v1.0/${userId}/threads`;
     const createParams = {
       'media_type': 'VIDEO',
-      'video_url': publicVideoUrl,
+      'video_url': normalizedUrl,
       'text': text || ''
     };
     
