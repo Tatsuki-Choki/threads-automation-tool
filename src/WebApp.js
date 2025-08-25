@@ -4,12 +4,12 @@
 // Webhook設定
 // ===========================
 const WEBHOOK_CONFIG = {
-  // Meta for Developersで設定する検証トークン（環境変数として設定推奨）
-  VERIFY_TOKEN: 'threads-gas-webhook-very-secret-token-12345',
-  
+  // Meta for Developersで設定する検証トークン（Script Propertiesから取得）
+  VERIFY_TOKEN: PropertiesService.getScriptProperties().getProperty('WEBHOOK_VERIFY_TOKEN') || null,
+
   // アプリシークレット（署名検証用）
-  APP_SECRET: null, // getConfig('APP_SECRET')で取得
-  
+  APP_SECRET: PropertiesService.getScriptProperties().getProperty('APP_SECRET') || null,
+
   // サポートするイベントタイプ
   SUPPORTED_EVENTS: ['threads_replies', 'threads_mentions']
 };
@@ -32,13 +32,20 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 署名検証
+    // 署名検証（Google Apps Scriptの制限により実装不可）
+    // NOTE: Google Apps ScriptではHTTPヘッダーを取得できないため、
+    // 署名検証をスキップしています。本番環境ではCloud Run/Functionsへの移設を推奨
     const signature = headers['x-hub-signature-256'] || '';
-    if (!verifyWebhookSignature(postData.contents, signature)) {
-      console.error('署名検証に失敗しました');
-      return ContentService
-        .createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
-        .setMimeType(ContentService.MimeType.JSON);
+    if (signature && WEBHOOK_CONFIG.APP_SECRET) {
+      if (!verifyWebhookSignature(postData.contents, signature)) {
+        console.error('署名検証に失敗しました');
+        return ContentService
+          .createTextOutput(JSON.stringify({ error: 'Unauthorized' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    } else {
+      console.warn('⚠️ 署名検証がスキップされました（APP_SECRET未設定またはヘッダー取得不可）');
+      console.warn('セキュリティ向上のため、Cloud Run/Functionsへの移設を検討してください');
     }
     
     // JSONペイロードをパース

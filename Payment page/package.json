@@ -1,0 +1,16 @@
+{
+  "name": "autothreads-payment",
+  "version": "1.0.0",
+  "description": "AutoThreads Payment Page with Stripe Integration",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "stripe": "^14.0.0"
+  },
+  "devDependencies": {
+    "vercel": "^32.0.0"
+  }
+}

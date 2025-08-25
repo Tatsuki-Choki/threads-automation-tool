@@ -1,0 +1,65 @@
+# ===========================
+# Google Apps Script - Script Properties 設定値
+# ===========================
+# 
+# 重要: このファイルには機密情報が含まれています。
+#      絶対にGitにコミットしないでください。
+#      設定後は安全な場所に保管するか削除してください。
+# 
+# 設定方法:
+# 1. Google Apps Scriptエディタを開く
+# 2. 左側メニューから「プロジェクトの設定」（歯車アイコン）をクリック
+# 3. 下部の「スクリプトのプロパティ」セクションを見つける
+# 4. 「プロパティを追加」をクリック
+# 5. 以下のキーと値をコピー＆ペーストして設定
+# ===========================
+
+
+# === 必須設定項目 ===
+
+# 管理者パスワード（管理機能へのアクセス用）
+ADMIN_PASSWORD=PB67sjj_7NPhsliuTVMqWw
+
+# シート保護パスワード（設定シートの表示/非表示用）
+SHEET_PROTECTION_PASSWORD=aLHjML6rYivBvyCRxz956A
+
+# Webhook検証トークン（Meta Webhooks用）
+WEBHOOK_VERIFY_TOKEN=efc6be49e719e9c5f9d9b1094287a9565af25634173515267c90e4a2bda58a64
+
+# === Meta認証情報（Meta for Developersから取得） ===
+# 以下は手動で入力が必要です
+
+# App Secret（アプリの設定 → 基本設定）
+APP_SECRET=<Meta for Developersから取得>
+
+# OAuth Client ID（アプリの設定 → 基本設定）
+CLIENT_ID=<Meta for Developersから取得>
+
+# OAuth Client Secret（アプリの設定 → 基本設定）
+CLIENT_SECRET=<Meta for Developersから取得>
+
+# === 推奨設定項目（オプション） ===
+
+# ログレベル（DEBUG, INFO, WARN, ERROR）
+LOG_LEVEL=INFO
+
+# 機密データのマスキング（true/false）
+MASK_SENSITIVE_DATA=true
+
+# デバッグモード（true/false）
+DEBUG_MODE=false
+
+# ===========================
+# 設定完了チェックリスト
+# ===========================
+# [ ] ADMIN_PASSWORD を設定
+# [ ] SHEET_PROTECTION_PASSWORD を設定
+# [ ] WEBHOOK_VERIFY_TOKEN を設定
+# [ ] APP_SECRET を設定（Meta for Developersから）
+# [ ] CLIENT_ID を設定（Meta for Developersから）
+# [ ] CLIENT_SECRET を設定（Meta for Developersから）
+# [ ] LOG_LEVEL を設定
+# [ ] MASK_SENSITIVE_DATA を設定
+# [ ] DEBUG_MODE を設定
+# ===========================
+

@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoThreads - 決済ページ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #ffffff;
+            padding: 0 16px;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 20px 0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #666;
+            font-weight: 400;
+        }
+
+        .main-content {
+            background: #fafafa;
+            border-radius: 16px;
+            padding: 32px 24px;
+            margin-bottom: 30px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .plan-title {
+            font-size: 24px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #000;
+        }
+
+        .price-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .original-price {
+            font-size: 16px;
+            color: #999;
+            text-decoration: line-through;
+            margin-bottom: 6px;
+        }
+
+        .current-price {
+            font-size: 36px;
+            font-weight: 700;
+            color: #000;
+            margin-bottom: 6px;
+        }
+
+        .price-note {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .price-note-sub {
+            font-size: 13px;
+            color: #999;
+            margin-bottom: 16px;
+            margin-top: 0;
+        }
+
+        .campaign-badge {
+            display: inline-block;
+            background: #000;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+
+        .payment-button {
+            width: 100%;
+            background: #22c55e;
+            color: #fff;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            position: relative;
+        }
+
+        .payment-button:hover {
+            background: #16a34a;
+            transform: translateY(-1px);
+        }
+
+        .button-price-main {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .button-price-original {
+            font-size: 14px;
+            text-decoration: line-through;
+            opacity: 0.8;
+            margin-right: 8px;
+        }
+
+        .coupon-notice {
+            background: #4a4a4a;
+            color: #fff;
+            text-align: center;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid #666;
+        }
+
+        .coupon-text {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .coupon-subtext {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .features {
+            margin-bottom: 30px;
+        }
+
+        .features h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #000;
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 14px;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .feature-icon {
+            margin-right: 12px;
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            background: #4a4a4a;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .feature-text {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.4;
+        }
+
+        .guarantee {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .guarantee h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #000;
+        }
+
+        .guarantee p {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .faq-section {
+            margin-top: 40px;
+        }
+
+        .faq-title {
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #000;
+        }
+
+        .faq-item {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .faq-question {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #000;
+        }
+
+        .faq-answer {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .bottom-purchase-section {
+            margin-top: 40px;
+            padding: 32px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">AutoThreads</div>
+            <div class="subtitle">戦略的なThreads運用が、誰でも簡単に実現可能</div>
+        </header>
+
+        <main class="main-content">
+            <h2 class="plan-title">スタンダードプラン</h2>
+
+            <div class="price-section">
+                <div class="current-price">¥9,800/月</div>
+                <div class="price-note">月額料金（税込）</div>
+            </div>
+
+            <a href="#" class="payment-button">
+                <span class="button-price-main">今すぐ申し込む</span>
+            </a>
+
+
+
+            <div class="features">
+                <h3>プランに含まれる機能</h3>
+                <ul class="feature-list">
+                    <li class="feature-item">
+                        <div class="feature-icon">1</div>
+                        <span class="feature-text">投稿予約をスプレッドシートで一括管理</span>
+                    </li>
+                    <li class="feature-item">
+                        <div class="feature-icon">2</div>
+                        <span class="feature-text">ツリー型投稿も直感的に予約可能</span>
+                    </li>
+                    <li class="feature-item">
+                        <div class="feature-icon">3</div>
+                        <span class="feature-text">キーワード自動返信機能（確率設定・ランダム対応）</span>
+                    </li>
+                    <li class="feature-item">
+                        <div class="feature-icon">4</div>
+                        <span class="feature-text">最大3アカウントまで利用可能</span>
+                    </li>
+                    <li class="feature-item">
+                        <div class="feature-icon">5</div>
+                        <span class="feature-text">ノーコード設計で誰でも簡単操作</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="guarantee">
+                <h4>安心の導入サポート</h4>
+                <p>ご購入後、わかりやすいマニュアルをお送りします。<br>
+                10〜15分で設定完了できるよう、丁寧にサポートいたします。</p>
+            </div>
+
+            <div class="guarantee" style="background: #fff3cd; border-color: #ffeaa7;">
+                <h4 style="color: #856404;">ご利用にあたっての注意事項</h4>
+                <p style="color: #856404;">本ツールはGoogleスプレッドシートの高度な機能を使用するため、<strong>パソコンからの操作が必要です</strong>。<br>
+                原則として、スマートフォンやタブレットからは使用できません。</p>
+            </div>
+        </main>
+
+        <section class="faq-section">
+            <h3 class="faq-title">よくあるご質問</h3>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q. プログラミングスキルは必要ですか？</div>
+                <div class="faq-answer">A. 必要ありません。すべてGoogleスプレッドシートで設定できます。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. セキュリティは安全ですか？</div>
+                <div class="faq-answer">A. はい。Googleのセキュリティ基準に準拠しており、安心してご利用いただけます。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. 導入にどのくらい時間がかかりますか？</div>
+                <div class="faq-answer">A. Threads APIの取得が必要ですが、ご購入後にわかりやすいマニュアルをお送りします。10〜15分で設定できます。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. 4アカウント以上利用したい場合は？</div>
+                <div class="faq-answer">A. 3アカウント単位で追加ごとに＋9,800円で拡張可能です。お気軽にお問い合わせください。</div>
+            </div>
+
+            <div class="faq-item">
+                <div class="faq-question">Q. スマートフォンから操作できますか？</div>
+                <div class="faq-answer">A. 申し訳ございません。本ツールはGoogleスプレッドシートの高度な機能を使用するため、パソコンからの操作が必要です。原則として、スマートフォンやタブレットからは使用できません。</div>
+            </div>
+        </section>
+
+        <div class="bottom-purchase-section">
+            <a href="#" class="payment-button">
+                <span class="button-price-main">今すぐ申し込む</span>
+            </a>
+
+
+        </div>
+
+        <!-- LINE公式アカウント告知セクション -->
+        <section class="line-support-section" style="
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 32px 24px;
+            margin: 40px auto 40px;
+            max-width: 480px;
+            text-align: center;
+        ">
+            <div style="
+                display: inline-block;
+                background: #06C755;
+                color: white;
+                padding: 4px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-bottom: 16px;
+            ">💬 お問い合わせはLINEで！</div>
+            
+            <p style="
+                color: #666;
+                font-size: 15px;
+                line-height: 1.7;
+                margin-bottom: 24px;
+            ">
+                ご質問やサポートが必要な場合は、<br>
+                公式LINEからお気軽にお問い合わせください。<br>
+                迅速に対応いたします。
+            </p>
+            
+            <a href="https://lin.ee/YTmj5NS" target="_blank" style="
+                display: inline-block;
+                background: #06C755;
+                color: white;
+                padding: 14px 32px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 16px;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(6, 199, 85, 0.3);
+            " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(6, 199, 85, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(6, 199, 85, 0.3)'">
+                公式LINEを友だち追加
+            </a>
+        </section>
+
+        <footer class="footer">
+            <p>&copy; 2025 AutoThreads. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        // APIを使用した決済処理（クーポン対応）
+        document.addEventListener('DOMContentLoaded', function() {
+            const paymentButtons = document.querySelectorAll('.payment-button');
+            
+            paymentButtons.forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    
+                    try {
+                        // ローディング表示
+                        const originalText = button.innerHTML;
+                        button.innerHTML = '<span style="opacity: 0.7;">処理中...</span>';
+                        button.style.pointerEvents = 'none';
+                        
+                        // Checkout Sessionの作成
+                        const response = await fetch('/api/create-checkout-session', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('決済セッションの作成に失敗しました');
+                        }
+                        
+                        const { url } = await response.json();
+                        
+                        // Stripeの決済ページへリダイレクト
+                        window.location.href = url;
+                        
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('エラーが発生しました。もう一度お試しください。');
+                        
+                        // ボタンを元に戻す
+                        button.innerHTML = originalText;
+                        button.style.pointerEvents = 'auto';
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

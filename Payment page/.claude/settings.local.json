@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__list_dir",
+      "mcp__serena__replace_regex",
+      "Bash(npm install)",
+      "Bash(vercel)",
+      "Bash(vercel:*)",
+      "mcp__serena__find_file",
+      "Bash(claude mcp add playwright:*)",
+      "Bash(claude mcp:*)",
+      "WebFetch(domain:autothreads-payment-eunh833ek-tatsuki-chokis-projects.vercel.app)",
+      "Bash(npx vercel:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:autothreads-payment.vercel.app)"
+    ],
+    "deny": []
+  }
+}

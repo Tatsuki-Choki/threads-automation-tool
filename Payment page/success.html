@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoThreads - 決済完了</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6; color: #333; background-color: #ffffff; padding: 0 16px;
+        }
+        .container { max-width: 480px; margin: 0 auto; padding: 20px 0; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .logo { font-size: 28px; font-weight: 700; color: #000; margin-bottom: 12px; letter-spacing: -0.02em; }
+        .subtitle { font-size: 16px; color: #666; font-weight: 400; }
+        
+        /* 成功メッセージセクション */
+        .success-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: #4a4a4a;
+            border-radius: 16px;
+            color: white;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .success-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .success-subtitle {
+            font-size: 16px;
+            opacity: 0.95;
+        }
+        
+        /* 警告セクション */
+        .warning-section {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .warning-title {
+            display: flex;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 700;
+            color: #856404;
+            margin-bottom: 12px;
+        }
+        .warning-icon {
+            font-size: 24px;
+            margin-right: 8px;
+        }
+        .warning-text {
+            font-size: 14px;
+            color: #856404;
+            line-height: 1.6;
+        }
+        
+        /* ステップセクション */
+        .steps-section {
+            background: #fafafa;
+            border-radius: 16px;
+            padding: 32px 24px;
+            margin-bottom: 30px;
+            border: 1px solid #e5e5e5;
+        }
+        .step-item {
+            margin-bottom: 32px;
+        }
+        .step-item:last-child {
+            margin-bottom: 0;
+        }
+        .step-number {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            background: #4a4a4a;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 32px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .step-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #000;
+        }
+        .step-content {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            margin-left: 40px;
+        }
+        .document-link {
+            display: inline-block;
+            background: #4a4a4a;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+        }
+        .document-link:hover {
+            background: #5a5a5a;
+            transform: translateY(-1px);
+        }
+        .key-list {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        .key-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .key-item:last-child {
+            margin-bottom: 0;
+        }
+        .key-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background: #4a4a4a;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .key-text {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        /* LINE CTAセクション */
+        .line-cta-section {
+            background: #f8f9fa;
+            border: 1px solid #d1d5db;
+            color: #333;
+            border-radius: 16px;
+            padding: 28px 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .line-cta-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #000;
+        }
+        .line-cta-text {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            color: #666;
+        }
+        .line-button {
+            display: inline-block;
+            background: #06C755;
+            color: white;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        .line-button:hover {
+            background: #00B849;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(6, 199, 85, 0.3);
+        }
+        
+        /* 注意事項 */
+        .notice-box {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .notice-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #92400e;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .notice-content {
+            font-size: 14px;
+            color: #78350f;
+            line-height: 1.6;
+        }
+        .notice-highlight {
+            background: #fbbf24;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        
+        /* サポートセクション */
+        .support-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .support-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #000;
+        }
+        .support-text {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        
+        /* ウェルカムメッセージ */
+        .welcome-message {
+            background: #4a4a4a;
+            color: white;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .welcome-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .welcome-text {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.95;
+        }
+        
+        .footer { 
+            text-align: center; 
+            margin-top: 40px; 
+            padding-top: 30px; 
+            border-top: 1px solid #e5e5e5; 
+        }
+        .footer p { 
+            font-size: 12px; 
+            color: #999; 
+        }
+    </style>
+    <meta name="description" content="AutoThreads 決済完了 - 初期設定ガイド" />
+    <link rel="canonical" href="/success.html" />
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">AutoThreads</div>
+            <div class="subtitle">戦略的なThreads運用が、誰でも簡単に実現可能</div>
+        </header>
+
+        <!-- 成功メッセージ -->
+        <div class="success-header">
+            <h1 class="success-title">決済完了しました</h1>
+            <p class="success-subtitle">AutoThreadsへようこそ！</p>
+        </div>
+
+        <!-- 重要な警告 -->
+        <div class="warning-section">
+            <div class="warning-title">
+                <span class="warning-icon">⚠️</span>
+                まずはこちらをご確認ください
+            </div>
+            <div class="warning-text">
+                このたびは『AutoThreads』をご購入いただき、誠にありがとうございます。<br>
+                スムーズにご利用いただくために、まず以下の手順に従って初期設定を進めてください。
+            </div>
+        </div>
+
+        <!-- セットアップ手順 -->
+        <div class="steps-section">
+            <div class="step-item">
+                <div class="step-number">1</div>
+                <h2 class="step-title">導入マニュアルのご確認</h2>
+                <div class="step-content">
+                    <p>以下のGoogleドキュメントに、初期設定から運用開始までの手順をまとめています。</p>
+                    
+                    <a href="https://docs.google.com/document/d/1Kv2AiYV_OgidGU2AFH4QC37TlwkJ0IDFXn4KVHVgXAw/edit?usp=sharing" target="_blank" class="document-link">
+                        ▶︎ 導入マニュアルはこちら
+                    </a>
+                    
+                    <p>最初の設定では、以下の3つのキーが必要になります。</p>
+                    
+                    <div class="key-list">
+                        <div class="key-item">
+                            <span class="key-number">❶</span>
+                            <span class="key-text">ThreadsアプリID</span>
+                        </div>
+                        <div class="key-item">
+                            <span class="key-number">❷</span>
+                            <span class="key-text">Threads App Secret</span>
+                        </div>
+                        <div class="key-item">
+                            <span class="key-number">❸</span>
+                            <span class="key-text">Threadsアカウントのアクセストークン</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #dc2626; font-weight: 600;">必ずマニュアルを一読のうえ、手順に沿ってキーを取得してください。</p>
+                </div>
+            </div>
+
+            <div class="step-item">
+                <div class="step-number">2</div>
+                <h2 class="step-title">公式LINEへのキー送信のお願い</h2>
+                <div class="step-content">
+                    <p>取得した3つのキーは、設定の都合上こちらで確認が必要となります。<br>
+                    お手数ですが、取得後すぐに公式LINEへメッセージでご送信ください。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINE送信の注意事項 -->
+        <div class="notice-box">
+            <div class="notice-title">
+                <span style="margin-right: 8px;">⚠️⚠️⚠️</span>
+                ご注意とお願い
+            </div>
+            <div class="notice-content">
+                キー送信の際、<span class="notice-highlight">Stripe決済した際のメールアドレス</span>を合わせてお送りいただきますようご協力をお願いいたします。
+            </div>
+        </div>
+
+        <!-- LINE CTA -->
+        <div class="line-cta-section">
+            <h3 class="line-cta-title">公式LINEアカウント</h3>
+            <p class="line-cta-text">
+                いただいた情報は迅速に確認・対応いたしますが、<br>
+                深夜・早朝などの時間帯は返信が遅れる可能性があります。<br>
+                通常は6〜12時間以内の対応を目安としております。
+            </p>
+            
+            <!-- QRコード -->
+            <div style="background: white; padding: 16px; border-radius: 12px; display: inline-block; margin-bottom: 20px; border: 1px solid #d1d5db;">
+                <img src="https://qr-official.line.me/gs/M_wgis5cq_GW.png" alt="LINE公式アカウントQRコード" style="width: 180px; height: 180px;">
+            </div>
+            
+            <div>
+                <a href="https://lin.ee/wGIs5cq" target="_blank" class="line-button">
+                    公式LINEを友だち追加
+                </a>
+            </div>
+        </div>
+
+        <!-- サポートセクション -->
+        <div class="support-section">
+            <h3 class="support-title">3. ご不明点がある場合</h3>
+            <p class="support-text">
+                設定中にご不明な点がございましたら、<br>
+                上記の公式LINEよりお気軽にご相談ください。
+            </p>
+            <p class="support-text">
+                可能な限りスムーズに導入いただけるよう、<br>
+                サポートさせていただきます。
+            </p>
+        </div>
+
+        <!-- ウェルカムメッセージ -->
+        <div class="welcome-message">
+            <h3 class="welcome-title">それでは、AutoThreadsの世界へようこそ！</h3>
+            <p class="welcome-text">
+                設定が完了すれば、あとは運用がぐっと楽になります。<br>
+                投稿予約・自動返信・ツリー型投稿…<br>
+                すべてが、スプレッドシートからスマートに。<br><br>
+                <strong>Threads運用の新しい常識を、今日からあなたの手に。</strong>
+            </p>
+        </div>
+
+        <footer class="footer">
+            <p>&copy; 2025 AutoThreads. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>

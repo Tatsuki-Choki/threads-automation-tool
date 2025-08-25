@@ -1295,44 +1295,6 @@ function checkScheduledPostsData() {
 }
 
 // ===========================
-// API使用状況確認（デバッグ用）
-// ===========================
-function checkAPIUsageStatus() {
-  const ui = SpreadsheetApp.getUi();
-  const quota = checkDailyAPIQuota();
-  
-  const message = `API使用状況レポート\n\n` +
-    `本日の使用回数: ${quota.count.toLocaleString()}\n` +
-    `残り使用可能回数: ${quota.remaining.toLocaleString()}\n` +
-    `1日の制限: 20,000回\n\n` +
-    `${quota.isNearLimit ? '⚠️ 警告: API制限に近づいています！' : '✅ 正常範囲内です'}`;
-  
-  ui.alert('API使用状況', message, ui.ButtonSet.OK);
-}
-
-// ===========================
-// 手動でAPI使用回数をリセット（緊急用）
-// ===========================
-function resetAPIQuotaManually() {
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.alert(
-    'API使用回数リセット',
-    'API使用回数のカウンターをリセットしますか？\n\n' +
-    '⚠️ 注意: これは緊急時のみ使用してください。',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (response === ui.Button.YES) {
-    const scriptProperties = PropertiesService.getScriptProperties();
-    scriptProperties.setProperty('API_CALL_COUNT', '0');
-    scriptProperties.setProperty('API_QUOTA_RESET_DATE', new Date().toDateString());
-    
-    ui.alert('完了', 'API使用回数をリセットしました。', ui.ButtonSet.OK);
-    logOperation('API使用回数リセット', 'info', '手動リセット実行');
-  }
-}
-
-// ===========================
 // 予約投稿の強制実行（過去の投稿も含む）
 // ===========================
 function forceProcessScheduledPosts() {

@@ -6,6 +6,7 @@
 // ===========================
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const THREADS_API_BASE = 'https://graph.threads.net';
+const LOG_MAX_ENTRIES = 150; // ログシートの最大保持件数（ヘッダー除く）
 
 // ===========================
 // メニューを再読み込み
@@ -115,10 +116,6 @@ function onOpen() {
       .addItem('📋 データ確認', 'checkScheduledPostsData')
       .addItem('🐛 予約投稿デバッグ実行', 'debugScheduledPosts')
       .addItem('💪 強制実行（過去含む）', 'forceProcessScheduledPosts'))
-    .addSeparator()
-    .addSubMenu(ui.createMenu('📊 API管理')
-      .addItem('📈 API使用状況確認', 'checkAPIUsageStatus')
-      .addItem('🔄 API使用回数リセット（緊急用）', 'resetAPIQuotaManually'))
     .addToUi();
   
     // 初回起動時の設定チェック
@@ -559,9 +556,16 @@ function logOperation(operation, status, details) {
     // 日時フォーマットを設定（年月日時分秒）
     logSheet.getRange(2, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
 
-    // ログが2000行を超えたら古いもの（2001行目以降）を削除
-    if (logSheet.getLastRow() > 2000) {
-      logSheet.deleteRows(2001, logSheet.getLastRow() - 2000);
+    // ログ行数制限の処理
+    // ヘッダー行を含めた最大行数
+    const maxTotalRows = 1 + LOG_MAX_ENTRIES;
+    const currentLastRow = logSheet.getLastRow();
+    
+    // 現在の行数が最大行数を超えている場合、古い行を削除
+    if (currentLastRow > maxTotalRows) {
+      const rowsToDelete = currentLastRow - maxTotalRows;
+      // 最古の行から削除（maxTotalRows + 1行目から最終行まで）
+      logSheet.deleteRows(maxTotalRows + 1, rowsToDelete);
     }
   } catch (error) {
     console.error('logOperation エラー:', error);
@@ -718,29 +722,79 @@ function getUserInfo(accessToken) {
 // ===========================
 function resetSettingsSheet() {
   const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('基本設定シート再構成', 
+    '基本設定シートを再構成しますか？\n既存の設定値は保持されます。', 
+    ui.ButtonSet.YES_NO);
   
-  // パスワード確認
   if (!verifyPassword('基本設定シート再構成')) {
     return;
   }
   
-  const response = ui.alert(
-    '基本設定シート再構成',
-    '基本設定シートを削除して再作成しますか？\n\n' +
-    '⚠️ 既存の設定（トークン等）はすべて削除されます。\n' +
-    '再度認証が必要になります。',
-    ui.ButtonSet.YES_NO
-  );
-  
-  if (response == ui.Button.YES) {
-    try {
-      initializeSettingsSheet();
-      ui.alert('基本設定シートを再構成しました。\n\n' +
-        '必要な情報を入力してから、認証を実行してください。');
-    } catch (error) {
-      console.error('基本設定シート再構成エラー:', error);
-      ui.alert('エラーが発生しました: ' + error.message);
+  try {
+    console.log('基本設定シート再構成開始');
+    
+    // 既存の値を保存（最小限のアクセス）
+    const existingValues = {};
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('基本設定');
+    
+    if (sheet) {
+      // 必要な範囲のみ取得
+      const lastRow = Math.min(sheet.getLastRow(), 20); // 最大20行まで
+      if (lastRow > 1) {
+        const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+        for (let i = 0; i < data.length; i++) {
+          if (data[i][0] && data[i][1]) {
+            existingValues[data[i][0]] = data[i][1];
+          }
+        }
+      }
+      
+      // 処理を分散
+      Utilities.sleep(500);
+      
+      // シートを削除
+      ss.deleteSheet(sheet);
+      
+      Utilities.sleep(500);
     }
+    
+    // 新しいシートを作成（シンプルに）
+    const newSheet = ss.insertSheet('基本設定');
+    
+    // ヘッダーのみ設定
+    newSheet.getRange(1, 1, 1, 3).setValues([['設定項目', '値', '説明']]);
+    newSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+    
+    // 基本データの設定（最小限）
+    const basicSettings = [
+      ['CLIENT_ID', existingValues['CLIENT_ID'] || '', 'Threads App ID'],
+      ['CLIENT_SECRET', existingValues['CLIENT_SECRET'] || '', 'Threads App Secret'],
+      ['ACCESS_TOKEN', existingValues['ACCESS_TOKEN'] || '', 'アクセストークン'],
+      ['USER_ID', existingValues['USER_ID'] || '', 'ユーザーID'],
+      ['USERNAME', existingValues['USERNAME'] || '', 'ユーザー名']
+    ];
+    
+    if (basicSettings.length > 0) {
+      newSheet.getRange(2, 1, basicSettings.length, 3).setValues(basicSettings);
+      // CLIENT_ID（B2セル）を書式なしテキストに設定
+      newSheet.getRange(2, 2).setNumberFormat('@');
+    }
+    
+    // 列幅のみ設定（装飾は最小限）
+    newSheet.setColumnWidth(1, 150);
+    newSheet.setColumnWidth(2, 300);
+    newSheet.setColumnWidth(3, 400);
+    
+    // 非表示にする
+    newSheet.hideSheet();
+    
+    ui.alert('基本設定シートを再構成しました。');
+    console.log('基本設定シート再構成完了');
+    
+  } catch (error) {
+    console.error('基本設定シート再構成エラー:', error);
+    ui.alert('エラーが発生しました: ' + error.message);
   }
 }
 
@@ -813,22 +867,48 @@ function initializeSettingsSheet() {
 // ===========================
 function resetLogsSheet() {
   const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('ログシート再構成', 
+    'ログシートを再構成しますか？\n既存のログは削除されます。', 
+    ui.ButtonSet.YES_NO);
   
-  const response = ui.alert(
-    'ログシート再構成',
-    'ログシートを削除して再作成しますか？\n\n' +
-    '⚠️ 既存のログはすべて削除されます。',
-    ui.ButtonSet.YES_NO
-  );
+  if (response !== ui.Button.YES) {
+    return;
+  }
   
-  if (response == ui.Button.YES) {
-    try {
-      initializeLogsSheet();
-      ui.alert('ログシートを再構成しました。');
-    } catch (error) {
-      console.error('ログシート再構成エラー:', error);
-      ui.alert('エラーが発生しました: ' + error.message);
+  try {
+    logOperation(
+      'ログシート再構成',
+      'info',
+      '再構成開始'
+    );
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ログ');
+    
+    // 既存シートを削除
+    if (sheet) {
+      ss.deleteSheet(sheet);
+      Utilities.sleep(500); // 処理を分散
     }
+    
+    // 新しいシートを作成（シンプルに）
+    const newSheet = ss.insertSheet('ログ');
+    
+    // ヘッダーのみ設定
+    const headers = ['日時', '操作', 'ステータス', '詳細'];
+    newSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    newSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    newSheet.setFrozenRows(1);
+    
+    // 最小限の列幅設定
+    newSheet.autoResizeColumns(1, headers.length);
+    
+    ui.alert('ログシートを再構成しました。');
+    console.log('ログシート再構成完了');
+    
+  } catch (error) {
+    console.error('ログシート再構成エラー:', error);
+    ui.alert('エラーが発生しました: ' + error.message);
   }
 }
 
@@ -1013,19 +1093,12 @@ function freezeExistingSheetHeaders() {
 // ===========================
 // シート保護機能
 // ===========================
-// パスワード定数（Script Propertiesから取得）
-const SHEET_PROTECTION_PASSWORD = PropertiesService.getScriptProperties().getProperty('SHEET_PROTECTION_PASSWORD') || null;
+// パスワード定数（ハードコーディング）
+const SHEET_PROTECTION_PASSWORD = 'tsukichiyo.inc@gmail.com';
 
 // 共通のパスワード確認関数
 function verifyPassword(promptTitle) {
   const ui = SpreadsheetApp.getUi();
-
-  // パスワードが設定されていない場合のチェック
-  if (!SHEET_PROTECTION_PASSWORD) {
-    ui.alert('エラー', '管理パスワードが設定されていません。\n\n' +
-      'Script Propertiesに「SHEET_PROTECTION_PASSWORD」を設定してください。', ui.ButtonSet.OK);
-    return false;
-  }
 
   const passwordPrompt = ui.prompt(
     promptTitle || 'パスワード入力',
@@ -1060,6 +1133,8 @@ function showSettingsSheet() {
   }
 
   sheet.showSheet();
+  // CLIENT_ID（B2セル）を書式なしテキストに設定（念のため）
+  sheet.getRange(2, 2).setNumberFormat('@');
   SpreadsheetApp.getActiveSpreadsheet().setActiveSheet(sheet);
   ui.alert('成功', '「基本設定」シートを表示しました。', ui.ButtonSet.OK);
   logOperation('基本設定シート表示', 'success', 'パスワード認証成功');

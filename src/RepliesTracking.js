@@ -437,8 +437,8 @@ function initializeRepliesSheet() {
   
   // ヘッダー行のフォーマット
   sheet.getRange(1, 1, 1, headers.length)
-    .setBackground('#4285F4')
-    .setFontColor('#FFFFFF')
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
     .setFontWeight('bold');
   
   // 列幅の調整
