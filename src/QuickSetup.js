@@ -419,34 +419,4 @@ function generateSampleData() {
 // ===========================
 // リプライ取得トリガーの再設定（所有者変更のため）
 // ===========================
-function showRepliesTrackingTriggerDialog() {
-  // 1. 既存のリプライ取得関連トリガーを削除する
-  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  try {
-    const allTriggers = ScriptApp.getProjectTriggers();
-    let deletedCount = 0;
-    for (const trigger of allTriggers) {
-      // 'fetchAndSaveReplies' または 'fetchAndAutoReply' を対象とする
-      if (trigger.getHandlerFunction() === 'fetchAndSaveReplies' || trigger.getHandlerFunction() === 'fetchAndAutoReply') {
-        ScriptApp.deleteTrigger(trigger);
-        deletedCount++;
-      }
-    }
-    if (deletedCount > 0) {
-      activeSpreadsheet.toast(`${deletedCount}個の既存リプライ取得トリガーを削除しました。`, 'トリガー削除', 3);
-    } else {
-      activeSpreadsheet.toast('削除対象のトリガーはありませんでした。', 'トリガー確認', 3);
-    }
-  } catch (e) {
-    Logger.log(`トリガーの削除中にエラーが発生しました: ${e}`);
-    activeSpreadsheet.toast('トリガーの削除中にエラーが発生しました。', 'エラー', 3);
-    // エラーが発生しても処理を続行する
-  }
-
-  // 2. 新しいトリガー設定ダイアログを表示する
-  // この操作を行ったユーザーが新しいトリガーの所有者になる
-  const html = HtmlService.createHtmlOutputFromFile('TriggerDialog')
-      .setWidth(400)
-      .setHeight(300);
-  SpreadsheetApp.getUi().showModalDialog(html, 'リプライ取得トリガーを再設定');
-}
+// 削除: showRepliesTrackingTriggerDialog（旧リプライ取得トリガー再設定）

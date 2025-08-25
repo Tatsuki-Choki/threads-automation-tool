@@ -90,7 +90,7 @@ function onOpen() {
     ui.createMenu('Threads自動化')
     .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
     .addSeparator()
-    .addItem('⏰ トリガーを再設定', 'showRepliesTrackingTriggerDialog')
+    .addItem('⏰ トリガーを再設定', 'resetAutomationTriggers')
     .addSeparator()
     .addItem('📤 手動投稿実行', 'manualPostExecution')
     .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
@@ -463,70 +463,120 @@ function setupTriggers() {
   SpreadsheetApp.getUi().showModalDialog(html, 'トリガー設定');
 }
 
+// ===========================
+// トリガー診断機能
+// ===========================
+// 削除: diagnoseTriggers（トリガー診断機能）
+
+// ===========================
+// トリガー管理（更新・修復）
+// ===========================
+// 削除: manageTriggers（トリガー管理UI）
+
+// ===========================
+// 権限を再取得するための関数
+// ===========================
+// 削除: requestPermissions（権限再取得）
+
+// ===========================
+// 現在のトリガー状態を取得
+// ===========================
+// 削除: getCurrentTriggerStatus（トリガー状態取得）
+
+// ===========================
+// トリガーの更新（削除して再作成）
+// ===========================
+// 削除: updateTriggerSettings（トリガー更新）
+
+// ===========================
+// すべてのトリガーを修復（削除して再作成）
+// ===========================
+// 削除: repairAllTriggers（全トリガー修復）
+
 // トリガー設定処理
-function processTriggerSettings(postInterval, replyInterval, tokenHour) {
+// 削除: processTriggerSettings（トリガー設定処理）
+
+// ===========================
+// 新規: トリガーを再設定（デフォルト値で作成）
+// ===========================
+function resetAutomationTriggers() {
+  // ドロップダウンで間隔を選択するダイアログを表示
+  const html = HtmlService.createHtmlOutputFromFile('TriggerResetDialog')
+    .setWidth(420)
+    .setHeight(360);
+  SpreadsheetApp.getUi().showModalDialog(html, 'トリガーを再設定');
+}
+
+// ユーザー選択値をもとにトリガー再設定を適用
+function applyAutomationTriggerSettings(postIntervalMinutes, replyIntervalMinutes) {
+  const ui = SpreadsheetApp.getUi();
+  const deleted = [];
+  const created = [];
+
   try {
-    // 既存のトリガーを削除
+    const targets = new Set(['processScheduledPosts', 'fetchAndAutoReply', 'refreshAccessToken', 'fetchAndSaveReplies']);
     const triggers = ScriptApp.getProjectTriggers();
-    triggers.forEach(trigger => {
-      ScriptApp.deleteTrigger(trigger);
+
+    // 対象トリガー削除
+    triggers.forEach(tr => {
+      const handler = tr.getHandlerFunction();
+      if (targets.has(handler)) {
+        try {
+          ScriptApp.deleteTrigger(tr);
+          deleted.push(handler);
+        } catch (e) {
+          console.error('トリガー削除エラー:', handler, e);
+        }
+      }
     });
-    
-    // 予約投稿用トリガー
-    if (postInterval <= 30) {
-      ScriptApp.newTrigger('processScheduledPosts')
-        .timeBased()
-        .everyMinutes(postInterval)
-        .create();
-    } else {
+
+    // 予約投稿トリガー: 5〜60分（5分刻み）。60は毎時に変換
+    if (postIntervalMinutes >= 60) {
       ScriptApp.newTrigger('processScheduledPosts')
         .timeBased()
         .everyHours(1)
         .create();
+      created.push('processScheduledPosts(60分≒毎時)');
+    } else {
+      ScriptApp.newTrigger('processScheduledPosts')
+        .timeBased()
+        .everyMinutes(postIntervalMinutes)
+        .create();
+      created.push(`processScheduledPosts(${postIntervalMinutes}分)`);
     }
-    
-    // リプライ取得＋自動返信の統合トリガー
-    if (replyInterval <= 30) {
+
+    // リプライ取得＋自動返信: 30〜150分（30分刻み）+ 10分(非推奨)
+    if (replyIntervalMinutes <= 59) {
       ScriptApp.newTrigger('fetchAndAutoReply')
         .timeBased()
-        .everyMinutes(replyInterval)
+        .everyMinutes(replyIntervalMinutes)
         .create();
-    } else if (replyInterval <= 60) {
-      ScriptApp.newTrigger('fetchAndAutoReply')
-        .timeBased()
-        .everyHours(1)
-        .create();
-    } else {
-      // 60分を超える場合は、時間単位で設定
-      const hours = Math.floor(replyInterval / 60);
+      created.push(`fetchAndAutoReply(${replyIntervalMinutes}分)`);
+    } else if (replyIntervalMinutes >= 60) {
+      // Apps Scriptの制約により、90/150分等は時間単位に丸めます
+      const hours = Math.max(1, Math.floor(replyIntervalMinutes / 60));
       ScriptApp.newTrigger('fetchAndAutoReply')
         .timeBased()
         .everyHours(hours)
         .create();
+      created.push(`fetchAndAutoReply(約${hours}時間)`);
     }
-    
-    // トークンリフレッシュ用トリガー（毎日）
+
+    // アクセストークン更新は固定: 毎日3時
     ScriptApp.newTrigger('refreshAccessToken')
       .timeBased()
       .everyDays(1)
-      .atHour(tokenHour)
+      .atHour(3)
       .create();
-    
-    SpreadsheetApp.getUi().alert(
-      'トリガー設定完了',
-      `以下の設定でトリガーを作成しました:\n\n` +
-      `• 予約投稿: ${postInterval}分ごと\n` +
-      `• リプライ取得: ${replyInterval}分ごと${replyInterval >= 60 ? ' (' + (replyInterval / 60) + '時間)' : ''}\n` +
-      `• トークン更新: 毎日${tokenHour}時`,
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
-    
-    logOperation('トリガー設定', 'success', 
-      `投稿:${postInterval}分, リプライ:${replyInterval}分, トークン:${tokenHour}時`);
-    
+    created.push('refreshAccessToken(毎日3時)');
+
+    const msg = `削除: ${deleted.length ? deleted.join(', ') : 'なし'}\n作成: ${created.join(', ')}`;
+    logOperation('トリガー再設定', 'success', msg);
+    return { success: true, message: msg };
+
   } catch (error) {
-    logError('processTriggerSettings', error);
-    throw error;
+    logError('applyAutomationTriggerSettings', error);
+    return { success: false, error: error.toString() };
   }
 }
 
@@ -1243,4 +1293,3 @@ function checkTriggerOwners() {
     logError('checkTriggerOwners', error);
   }
 }
-
