@@ -240,7 +240,7 @@ function processReplyEvent(value) {
     console.log('リプライ情報:', JSON.stringify(reply, null, 2));
     
     // 設定を検証
-    const config = validateConfig();
+    const config = RM_validateConfig();
     if (!config) {
       console.error('設定が無効です');
       return;
@@ -253,13 +253,13 @@ function processReplyEvent(value) {
     }
     
     // 既に返信済みかチェック
-    if (hasAlreadyRepliedToday(reply.id, reply.userId || reply.username)) {
+    if (RM_hasAlreadyRepliedToday(reply.id, reply.userId || reply.username)) {
       console.log('本日既に返信済みのため処理をスキップ');
       return;
     }
     
     // キーワードマッチング
-    const matchedKeyword = findMatchingKeyword(reply.text);
+    const matchedKeyword = RM_findMatchingKeyword(reply.text);
     if (matchedKeyword) {
       console.log(`キーワードマッチ: "${matchedKeyword.keyword}"`);
       
@@ -268,7 +268,7 @@ function processReplyEvent(value) {
       
       if (postId) {
         // 自動返信を送信
-        const success = sendAutoReply(postId, reply, matchedKeyword, config);
+        const success = RM_sendAutoReply(postId, reply, matchedKeyword, config);
         
         if (success) {
           console.log('自動返信送信成功');
@@ -319,7 +319,7 @@ function getParentPostId(replyId, config) {
       fields: 'parent_id,root_post,replied_to'
     };
     
-    const response = fetchWithTracking(url + '?' + buildQueryString(params), {
+    const response = fetchWithTracking(url + '?' + RM_buildQueryString(params), {
       headers: {
         'Authorization': `Bearer ${config.accessToken}`
       },

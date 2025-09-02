@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        max-width: 400px;
+        margin: 0 auto;
+      }
+      h2 {
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 20px;
+      }
+      .input-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        color: #555;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      input[type="number"] {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        box-sizing: border-box;
+      }
+      input[type="number"]:focus {
+        outline: none;
+        border-color: #4285f4;
+      }
+      .help-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+      }
+      .button-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 30px;
+      }
+      button {
+        padding: 8px 20px;
+        border: none;
+        border-radius: 4px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      .primary-btn {
+        background-color: #4285f4;
+        color: white;
+      }
+      .primary-btn:hover {
+        background-color: #357ae8;
+      }
+      .primary-btn:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+      .secondary-btn {
+        background-color: #f0f0f0;
+        color: #333;
+      }
+      .secondary-btn:hover {
+        background-color: #e0e0e0;
+      }
+      .error {
+        color: #d50000;
+        font-size: 12px;
+        margin-top: 5px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>トリガー設定</h2>
+      
+      <div class="input-group">
+        <label for="postInterval">予約投稿の実行間隔（分）</label>
+        <input type="number" id="postInterval" min="1" max="60" value="5">
+        <div class="help-text">1〜60分の間で設定してください</div>
+        <div class="error" id="postError">1〜60の値を入力してください</div>
+      </div>
+      
+      <div class="input-group">
+        <label for="replyInterval">リプライ取得の実行間隔</label>
+        <select id="replyInterval" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+          <option value="30" selected>30分ごと</option>
+          <option value="60">60分ごと（1時間）</option>
+          <option value="90">90分ごと（1時間30分）</option>
+          <option value="120">120分ごと（2時間）</option>
+          <option value="150">150分ごと（2時間30分）</option>
+        </select>
+        <div class="help-text">30分単位で選択してください（最長150分）</div>
+      </div>
+      
+      <div class="input-group">
+        <label for="tokenHour">トークン更新時刻（時）</label>
+        <input type="number" id="tokenHour" min="0" max="23" value="3">
+        <div class="help-text">0〜23時の間で設定してください（24時間表記）</div>
+        <div class="error" id="tokenError">0〜23の値を入力してください</div>
+      </div>
+      
+      <div class="button-group">
+        <button class="secondary-btn" onclick="google.script.host.close()">キャンセル</button>
+        <button class="primary-btn" id="saveBtn" onclick="saveTriggerSettings()">設定を保存</button>
+      </div>
+    </div>
+    
+    <script>
+      function validateInputs() {
+        let isValid = true;
+        
+        const postInterval = parseInt(document.getElementById('postInterval').value);
+        const replyInterval = parseInt(document.getElementById('replyInterval').value);
+        const tokenHour = parseInt(document.getElementById('tokenHour').value);
+        
+        // 予約投稿の検証
+        if (isNaN(postInterval) || postInterval < 1 || postInterval > 60) {
+          document.getElementById('postError').style.display = 'block';
+          isValid = false;
+        } else {
+          document.getElementById('postError').style.display = 'none';
+        }
+        
+        // リプライ取得の検証（ドロップダウンなので基本的に有効）
+        if (isNaN(replyInterval) || replyInterval < 30 || replyInterval > 150) {
+          isValid = false;
+        }
+        
+        // トークン更新の検証
+        if (isNaN(tokenHour) || tokenHour < 0 || tokenHour > 23) {
+          document.getElementById('tokenError').style.display = 'block';
+          isValid = false;
+        } else {
+          document.getElementById('tokenError').style.display = 'none';
+        }
+        
+        return isValid;
+      }
+      
+      function saveTriggerSettings() {
+        if (!validateInputs()) {
+          return;
+        }
+        
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = '設定中...';
+        
+        const postInterval = parseInt(document.getElementById('postInterval').value);
+        const replyInterval = parseInt(document.getElementById('replyInterval').value);
+        const tokenHour = parseInt(document.getElementById('tokenHour').value);
+        
+        google.script.run
+          .withSuccessHandler(function() {
+            google.script.host.close();
+          })
+          .withFailureHandler(function(error) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = '設定を保存';
+            alert('エラーが発生しました: ' + error);
+          })
+          .processTriggerSettings(postInterval, replyInterval, tokenHour);
+      }
+      
+      // 入力時のリアルタイム検証
+      document.getElementById('postInterval').addEventListener('input', validateInputs);
+      document.getElementById('replyInterval').addEventListener('change', validateInputs);
+      document.getElementById('tokenHour').addEventListener('input', validateInputs);
+    </script>
+  </body>
+</html>

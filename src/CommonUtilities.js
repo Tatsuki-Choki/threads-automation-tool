@@ -10,7 +10,7 @@
  * アクティブなキーワードを取得
  * @return {Array} アクティブなキーワードの配列
  */
-function getActiveKeywords() {
+function CU_getActiveKeywords() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('キーワード設定');
@@ -45,7 +45,7 @@ function getActiveKeywords() {
     return activeKeywords;
     
   } catch (error) {
-    logError('getActiveKeywords', error);
+    logError('CU_getActiveKeywords', error);
     return [];
   }
 }
@@ -56,7 +56,7 @@ function getActiveKeywords() {
  * @param {string} keyword - キーワード（正規表現対応）
  * @return {boolean} マッチする場合true
  */
-function matchesKeyword(text, keyword) {
+function CU_matchesKeyword(text, keyword) {
   if (!text || !keyword) return false;
   
   try {
@@ -71,7 +71,7 @@ function matchesKeyword(text, keyword) {
     return text.toLowerCase().includes(keyword.toLowerCase());
     
   } catch (error) {
-    logWarn('キーワードマッチングエラー', {
+    logWarn('CU_キーワードマッチングエラー', {
       keyword,
       error: error.toString()
     });
@@ -86,17 +86,17 @@ function matchesKeyword(text, keyword) {
  * @param {Array} keywords - キーワード配列（省略時は自動取得）
  * @return {Object|null} マッチしたキーワードオブジェクトまたはnull
  */
-function findMatchingKeyword(text, keywords = null) {
+function CU_findMatchingKeyword(text, keywords = null) {
   if (!text) return null;
   
   // キーワードが指定されていない場合は取得
   if (!keywords) {
-    keywords = getActiveKeywords();
+    keywords = CU_getActiveKeywords();
   }
   
   // マッチするキーワードを検索
   const matchedKeywords = keywords.filter(kw => 
-    kw.keyword && matchesKeyword(text, kw.keyword)
+    kw.keyword && CU_matchesKeyword(text, kw.keyword)
   );
   
   if (matchedKeywords.length === 0) {
@@ -104,7 +104,7 @@ function findMatchingKeyword(text, keywords = null) {
   }
   
   // 確率に基づいて選択
-  return selectKeywordByProbability(matchedKeywords);
+  return CU_selectKeywordByProbability(matchedKeywords);
 }
 
 /**
@@ -112,7 +112,7 @@ function findMatchingKeyword(text, keywords = null) {
  * @param {Array} keywords - キーワード配列
  * @return {Object} 選択されたキーワード
  */
-function selectKeywordByProbability(keywords) {
+function CU_selectKeywordByProbability(keywords) {
   if (keywords.length === 0) return null;
   if (keywords.length === 1) return keywords[0];
   
@@ -280,7 +280,7 @@ function setConfigSafe(key, value) {
  * @param {string} userId - ユーザーID
  * @return {boolean} 返信済みの場合true
  */
-function hasAlreadyRepliedToday(replyId, userId) {
+function CU_hasAlreadyRepliedToday(replyId, userId) {
   try {
     const cache = CacheService.getScriptCache();
     const cacheKey = `replied_${getTodayString()}_${userId}`;
@@ -319,7 +319,7 @@ function hasAlreadyRepliedToday(replyId, userId) {
     return false;
     
   } catch (error) {
-    logError('hasAlreadyRepliedToday', error);
+    logError('CU_hasAlreadyRepliedToday', error);
     return false;
   }
 }
@@ -329,7 +329,7 @@ function hasAlreadyRepliedToday(replyId, userId) {
  * @param {string} replyId - 返信ID
  * @param {string} userId - ユーザーID
  */
-function recordReplyInCache(replyId, userId) {
+function CU_recordReplyInCache(replyId, userId) {
   try {
     const cache = CacheService.getScriptCache();
     const cacheKey = `replied_${getTodayString()}_${userId}`;
@@ -347,7 +347,7 @@ function recordReplyInCache(replyId, userId) {
     }
     
   } catch (error) {
-    logError('recordReplyInCache', error);
+    logError('CU_recordReplyInCache', error);
   }
 }
 
@@ -360,7 +360,7 @@ function recordReplyInCache(replyId, userId) {
  * @param {Object} params - パラメータオブジェクト
  * @return {string} クエリ文字列
  */
-function buildQueryString(params) {
+function CU_buildQueryString(params) {
   if (!params || typeof params !== 'object') {
     return '';
   }
@@ -385,7 +385,7 @@ function buildQueryString(params) {
  * 必須設定の検証
  * @return {Object|null} 検証済み設定またはnull
  */
-function validateConfig() {
+function CU_validateConfig() {
   const requiredConfigs = {
     accessToken: getConfigSafe('ACCESS_TOKEN'),
     userId: getConfigSafe('USER_ID'),

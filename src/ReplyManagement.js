@@ -5,17 +5,17 @@
 // ===========================
 function autoReplyToThreads() {
   try {
-    const config = validateConfig();
+    const config = RM_validateConfig();
     if (!config) return;
     
     console.log('===== 自動返信処理開始 =====');
     
     // 最終チェック時刻を取得
-    const lastCheckTime = getLastCheckTime();
+    const lastCheckTime = RM_getLastCheckTime();
     const currentTime = Date.now();
     
     // 自分の投稿を取得
-    const myPosts = getMyThreadsPosts(config);
+    const myPosts = RM_getMyThreadsPosts(config);
     if (!myPosts || myPosts.length === 0) {
       console.log('投稿が見つかりません');
       return;
@@ -28,13 +28,13 @@ function autoReplyToThreads() {
     
     // 各投稿の返信を確認
     for (const post of myPosts) {
-      const result = processPostReplies(post, config, lastCheckTime);
+      const result = RM_processPostReplies(post, config, lastCheckTime);
       totalProcessed += result.processed;
       totalReplied += result.replied;
     }
     
     // 最終チェック時刻を更新
-    updateLastCheckTime(currentTime);
+    RM_updateLastCheckTime(currentTime);
     
     console.log(`===== 自動返信処理完了: ${totalProcessed}件確認, ${totalReplied}件返信 =====`);
     logOperation('自動返信処理', 'success', `確認: ${totalProcessed}件, 返信: ${totalReplied}件`);
@@ -46,9 +46,48 @@ function autoReplyToThreads() {
 }
 
 // ===========================
+// バックフィル（過去N時間）自動返信
+// ===========================
+function RM_backfillAutoReply(hours = 6, updateBaseline = true) {
+  try {
+    const config = RM_validateConfig();
+    if (!config) return { processed: 0, replied: 0 };
+
+    const cutoffTime = Date.now() - (hours * 60 * 60 * 1000);
+    const posts = RM_getMyThreadsPosts(config);
+
+    console.log(`===== バックフィル開始: 過去${hours}時間 =====`);
+    console.log(`${posts.length}件の投稿を確認中...`);
+
+    let totalProcessed = 0;
+    let totalReplied = 0;
+
+    for (const post of posts) {
+      const result = RM_processPostReplies(post, config, cutoffTime);
+      totalProcessed += result.processed;
+      totalReplied += result.replied;
+    }
+
+    if (updateBaseline) {
+      RM_updateLastCheckTime(Date.now());
+    }
+
+    console.log(`===== バックフィル完了: 確認 ${totalProcessed}件, 返信 ${totalReplied}件 =====`);
+    logOperation('バックフィル自動返信', 'success', `対象: 過去${hours}時間, 確認: ${totalProcessed}件, 返信: ${totalReplied}件`);
+
+    return { processed: totalProcessed, replied: totalReplied };
+
+  } catch (error) {
+    console.error('バックフィル処理エラー:', error);
+    logError('RM_backfillAutoReply', error);
+    return { processed: 0, replied: 0 };
+  }
+}
+
+// ===========================
 // 設定検証
 // ===========================
-function validateConfig() {
+function RM_validateConfig() {
   const accessToken = getConfig('ACCESS_TOKEN');
   const userId = getConfig('USER_ID');
   const username = getConfig('USERNAME');
@@ -65,7 +104,7 @@ function validateConfig() {
 // ===========================
 // 自分の投稿を取得
 // ===========================
-function getMyThreadsPosts(config, limit = 25) {
+function RM_getMyThreadsPosts(config, limit = 25) {
   try {
     const url = `${THREADS_API_BASE}/v1.0/${config.userId}/threads`;
     const params = {
@@ -75,7 +114,7 @@ function getMyThreadsPosts(config, limit = 25) {
     
     console.log(`投稿を取得中: ${url}`);
     
-    const response = fetchWithTracking(url + '?' + buildQueryString(params), {
+    const response = fetchWithTracking(url + '?' + RM_buildQueryString(params), {
       headers: {
         'Authorization': `Bearer ${config.accessToken}`
       },
@@ -93,7 +132,7 @@ function getMyThreadsPosts(config, limit = 25) {
     return result.data || [];
     
   } catch (error) {
-    logError('getMyThreadsPosts', error);
+    logError('RM_getMyThreadsPosts', error);
     return [];
   }
 }
@@ -101,13 +140,13 @@ function getMyThreadsPosts(config, limit = 25) {
 // ===========================
 // 投稿の返信を処理
 // ===========================
-function processPostReplies(post, config, lastCheckTime) {
+function RM_processPostReplies(post, config, lastCheckTime) {
   let processed = 0;
   let replied = 0;
   
   try {
     // 返信を取得（ページネーション対応）
-    const replies = getAllReplies(post.id, config);
+    const replies = RM_getAllReplies(post.id, config);
     
     for (const reply of replies) {
       // 新しい返信のみ処理
@@ -120,12 +159,12 @@ function processPostReplies(post, config, lastCheckTime) {
       if (reply.username === config.username) continue;
       
       // 既に返信済みかチェック
-      if (hasAlreadyRepliedToday(reply.id, reply.from?.id || reply.username)) continue;
+      if (RM_hasAlreadyRepliedToday(reply.id, reply.from?.id || reply.username)) continue;
       
       // キーワードマッチング
-      const matchedKeyword = findMatchingKeyword(reply.text);
+      const matchedKeyword = RM_findMatchingKeyword(reply.text);
       if (matchedKeyword) {
-        const success = sendAutoReply(reply.id, reply, matchedKeyword, config);
+        const success = RM_sendAutoReply(reply.id, reply, matchedKeyword, config);
         if (success) replied++;
       }
     }
@@ -140,7 +179,7 @@ function processPostReplies(post, config, lastCheckTime) {
 // ===========================
 // 全返信を取得（ページネーション対応）
 // ===========================
-function getAllReplies(postId, config) {
+function RM_getAllReplies(postId, config) {
   const allReplies = [];
   let hasNext = true;
   let after = null;
@@ -158,9 +197,9 @@ function getAllReplies(postId, config) {
       
       if (after) params.after = after;
       
-      console.log(`リクエストURL: ${url}?${buildQueryString(params)}`);
+      console.log(`リクエストURL: ${url}?${RM_buildQueryString(params)}`);
       
-      const response = fetchWithTracking(url + '?' + buildQueryString(params), {
+      const response = fetchWithTracking(url + '?' + RM_buildQueryString(params), {
         headers: {
           'Authorization': `Bearer ${config.accessToken}`
         },
@@ -210,7 +249,7 @@ function getAllReplies(postId, config) {
 // ===========================
 // キーワードマッチング
 // ===========================
-function matchesKeyword(text, keyword) {
+function RM_matchesKeyword(text, keyword) {
   const keywordText = keyword.keyword.toLowerCase();
   
   switch (keyword.matchType) {
@@ -228,7 +267,7 @@ function matchesKeyword(text, keyword) {
         const regex = new RegExp(keyword.keyword, 'i');
         return regex.test(text);
       } catch (error) {
-        logError('matchesKeyword', `無効な正規表現: ${keyword.keyword}`);
+        logError('RM_matchesKeyword', `無効な正規表現: ${keyword.keyword}`);
         return false;
       }
       
@@ -240,8 +279,8 @@ function matchesKeyword(text, keyword) {
 // ===========================
 // アクティブなキーワード取得
 // ===========================
-function getActiveKeywords() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('キーワード設定');
+function RM_getActiveKeywords() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(KEYWORD_SHEET_NAME);
   if (!sheet) {
     console.error('キーワード設定シートが見つかりません');
     return [];
@@ -279,7 +318,7 @@ function getActiveKeywords() {
 // ===========================
 // 確率に基づいてキーワードを選択
 // ===========================
-function selectKeywordByProbability(keywords) {
+function RM_selectKeywordByProbability(keywords) {
   // 各キーワードの確率を取得（デフォルトは100）
   let totalProbability = 0;
   const keywordProbabilities = keywords.map(keyword => {
@@ -308,8 +347,8 @@ function selectKeywordByProbability(keywords) {
 // ===========================
 // キーワードマッチング
 // ===========================
-function findMatchingKeyword(text) {
-  const keywords = getActiveKeywords();
+function RM_findMatchingKeyword(text) {
+  const keywords = RM_getActiveKeywords();
   const lowerText = text.toLowerCase();
   
   console.log(`キーワードマッチング開始: "${text}"`);
@@ -320,7 +359,7 @@ function findMatchingKeyword(text) {
   
   for (const keyword of keywords) {
     console.log(`キーワード "${keyword.keyword}" (${keyword.matchType}) をチェック中...`);
-    if (matchesKeyword(lowerText, keyword)) {
+    if (RM_matchesKeyword(lowerText, keyword)) {
       console.log(`✓ マッチしました！`);
       matchedKeywords.push(keyword);
     } else {
@@ -357,13 +396,13 @@ function findMatchingKeyword(text) {
   }
   
   // 同じ優先度のキーワードが複数ある場合は確率で選択
-  return selectKeywordByProbability(highestPriorityKeywords);
+  return RM_selectKeywordByProbability(highestPriorityKeywords);
 }
 
 // ===========================
 // 自動返信送信
 // ===========================
-function sendAutoReply(replyId, reply, keyword, config) {
+function RM_sendAutoReply(replyId, reply, keyword, config) {
   try {
     // 返信テキストを生成
     let replyText = keyword.replyContent;
@@ -426,7 +465,7 @@ function sendAutoReply(replyId, reply, keyword, config) {
     }
     
     // 返信履歴を記録
-    recordAutoReply(reply, replyText, keyword.keyword);
+    RM_recordAutoReply(reply, replyText, keyword.keyword);
     
     console.log(`自動返信送信成功: @${username} <- "${keyword.keyword}"`);
     return true;
@@ -440,9 +479,15 @@ function sendAutoReply(replyId, reply, keyword, config) {
 // ===========================
 // 返信履歴記録
 // ===========================
-function recordAutoReply(reply, replyText, matchedKeyword) {
+function RM_recordAutoReply(reply, replyText, matchedKeyword) {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('自動応答結果');
+    let sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(REPLY_HISTORY_SHEET_NAME);
+    if (!sheet) {
+      // シートがない場合は自動作成
+      sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(REPLY_HISTORY_SHEET_NAME);
+      sheet.appendRow(['送信日時','コメントID','ユーザーID','元のコメント','返信内容','マッチキーワード']);
+      sheet.setFrozenRows(1);
+    }
     const username = reply.from?.username || reply.username || 'unknown';
     
     sheet.appendRow([
@@ -461,7 +506,7 @@ function recordAutoReply(reply, replyText, matchedKeyword) {
     range.setFontColor('#000000');
     
     // キャッシュも更新
-    updateReplyCache(reply.id, reply.from?.id || username);
+    RM_updateReplyCache(reply.id, reply.from?.id || username);
     
   } catch (error) {
     console.error('返信履歴記録エラー:', error);
@@ -471,7 +516,7 @@ function recordAutoReply(reply, replyText, matchedKeyword) {
 // ===========================
 // 重複返信チェック
 // ===========================
-function hasAlreadyRepliedToday(replyId, userId) {
+function RM_hasAlreadyRepliedToday(replyId, userId) {
   const today = new Date().toDateString();
   const cacheKey = `replied_${userId}_${today}`;
   
@@ -485,7 +530,10 @@ function hasAlreadyRepliedToday(replyId, userId) {
   }
   
   // シートチェック
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('自動応答結果');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(REPLY_HISTORY_SHEET_NAME);
+  if (!sheet) {
+    return false;
+  }
   const data = sheet.getDataRange().getValues();
   
   for (let i = data.length - 1; i > 0; i--) { // 最新から確認
@@ -501,7 +549,7 @@ function hasAlreadyRepliedToday(replyId, userId) {
 // ===========================
 // 返信キャッシュ更新
 // ===========================
-function updateReplyCache(replyId, userId) {
+function RM_updateReplyCache(replyId, userId) {
   const today = new Date().toDateString();
   const cacheKey = `replied_${userId}_${today}`;
   
@@ -524,19 +572,19 @@ function updateReplyCache(replyId, userId) {
 // ===========================
 // 最終チェック時刻管理
 // ===========================
-function getLastCheckTime() {
+function RM_getLastCheckTime() {
   const stored = PropertiesService.getScriptProperties().getProperty('lastReplyCheck');
   return stored ? parseInt(stored) : Date.now() - (24 * 60 * 60 * 1000); // デフォルト24時間前
 }
 
-function updateLastCheckTime(timestamp) {
+function RM_updateLastCheckTime(timestamp) {
   PropertiesService.getScriptProperties().setProperty('lastReplyCheck', timestamp.toString());
 }
 
 // ===========================
 // ユーティリティ関数
 // ===========================
-function buildQueryString(params) {
+function RM_buildQueryString(params) {
   return Object.keys(params)
     .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
     .join('&');
@@ -557,6 +605,23 @@ function manualAutoReply() {
   if (response == ui.Button.YES) {
     autoReplyToThreads();
     ui.alert('自動返信処理が完了しました。\n詳細はログをご確認ください。');
+  }
+}
+
+// ===========================
+// 手動実行用（過去6時間のバックフィル）
+// ===========================
+function manualBackfill6Hours() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    '過去6時間を再処理',
+    '過去6時間の未返信リプライに自動返信を行いますか？',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (response == ui.Button.YES) {
+    const result = RM_backfillAutoReply(6, true);
+    ui.alert('バックフィル完了', `確認: ${result.processed}件\n返信: ${result.replied}件`, ui.ButtonSet.OK);
   }
 }
 
@@ -596,7 +661,7 @@ function debugAutoReplySystem() {
   console.log('===== 自動返信システムデバッグ =====');
   
   // 1. 設定確認
-  const config = validateConfig();
+  const config = RM_validateConfig();
   if (!config) {
     console.error('❌ 設定検証失敗');
     ui.alert('エラー', '認証情報が設定されていません', ui.ButtonSet.OK);
@@ -608,7 +673,7 @@ function debugAutoReplySystem() {
   
   // 2. API接続テスト
   try {
-    const posts = getMyThreadsPosts(config, 1);
+    const posts = RM_getMyThreadsPosts(config, 1);
     console.log(`✅ API接続成功: ${posts.length}件の投稿を取得`);
     
     if (posts.length > 0) {
@@ -621,14 +686,14 @@ function debugAutoReplySystem() {
   }
   
   // 3. キーワード設定確認
-  const keywords = getActiveKeywords();
+  const keywords = RM_getActiveKeywords();
   console.log(`✅ アクティブキーワード: ${keywords.length}件`);
   keywords.forEach((kw, index) => {
     console.log(`  ${index + 1}. "${kw.keyword}" (${kw.matchType})`);
   });
   
   // 4. 最終チェック時刻
-  const lastCheck = getLastCheckTime();
+  const lastCheck = RM_getLastCheckTime();
   console.log(`✅ 最終チェック時刻: ${new Date(lastCheck)}`);
   
   // 5. 返信テスト
@@ -640,7 +705,7 @@ function debugAutoReplySystem() {
     timestamp: new Date().toISOString()
   };
   
-  const matchedKeyword = findMatchingKeyword(testReply.text);
+  const matchedKeyword = RM_findMatchingKeyword(testReply.text);
   if (matchedKeyword) {
     console.log(`✅ キーワードマッチ: "${matchedKeyword.keyword}"`);
     console.log(`  返信内容: "${matchedKeyword.replyContent}"`);
@@ -673,7 +738,7 @@ function simulateAutoReply() {
   console.log('===== 返信シミュレーション =====');
   console.log(`テストコメント: "${testText}"`);
   
-  const matchedKeyword = findMatchingKeyword(testText);
+  const matchedKeyword = RM_findMatchingKeyword(testText);
   
   if (matchedKeyword) {
     console.log(`✅ マッチしたキーワード: "${matchedKeyword.keyword}"`);
@@ -699,7 +764,7 @@ function simulateAutoReply() {
     console.log('❌ マッチするキーワードがありません');
     
     // アクティブなキーワードを表示
-    const keywords = getActiveKeywords();
+    const keywords = RM_getActiveKeywords();
     const keywordList = keywords.map(kw => `・${kw.keyword} (${kw.matchType})`).join('\n');
     
     ui.alert(
@@ -716,7 +781,11 @@ function simulateAutoReply() {
 // ===========================
 function showAutoReplyStats() {
   const ui = SpreadsheetApp.getUi();
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('自動応答結果');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(REPLY_HISTORY_SHEET_NAME);
+  if (!sheet) {
+    ui.alert('統計情報', '自動応答結果シートがありません。', ui.ButtonSet.OK);
+    return;
+  }
   const data = sheet.getDataRange().getValues();
   
   if (data.length <= 1) {

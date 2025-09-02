@@ -8,6 +8,11 @@ const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const THREADS_API_BASE = 'https://graph.threads.net';
 const LOG_MAX_ENTRIES = 150; // ログシートの最大保持件数（ヘッダー除く）
 
+// シート名の定数（全体で統一）
+const KEYWORD_SHEET_NAME = 'キーワード設定';
+const REPLY_HISTORY_SHEET_NAME = '自動応答結果';
+const REPLIES_SHEET_NAME = '受信したリプライ';
+
 // ===========================
 // メニューを再読み込み
 // ===========================
@@ -95,6 +100,7 @@ function onOpen() {
     .addItem('📤 手動投稿実行', 'manualPostExecution')
     .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
     .addItem('🔄 自動返信のみ', 'manualAutoReply')
+    .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
     .addSeparator()
     .addItem('🧪 自動返信テスト', 'simulateAutoReply')
     .addItem('🧪 設定テスト', 'testConfiguration')
@@ -123,9 +129,190 @@ function onOpen() {
     
     // 既存シートのヘッダー行を固定
     freezeExistingSheetHeaders();
+
+    // アカウント情報メニューを追加
+    buildAccountInfoMenu_();
   } catch (error) {
     console.error('メニュー作成エラー:', error);
     // エラーが発生してもスプレッドシートは使えるようにする
+  }
+}
+
+// ===========================
+// アカウント情報メニュー
+// ===========================
+/**
+ * 時刻の整形（スクリプトのタイムゾーンに合わせる）
+ * @param {Date} date
+ * @return {string}
+ */
+function formatDateForDisplay_(date) {
+  try {
+    const tz = Session.getScriptTimeZone() || 'Asia/Tokyo';
+    return Utilities.formatDate(date, tz, 'yyyy/MM/dd HH:mm');
+  } catch (e) {
+    return new Date(date).toLocaleString('ja-JP');
+  }
+}
+
+/**
+ * アカウント/トークン状態の取得
+ * @return {Object} { username, expiresAt, expiryDisplay, remainingDays, status }
+ */
+function getAccountStatus_() {
+  const username = getConfig('USERNAME');
+  const expiresStr = getConfig('TOKEN_EXPIRES');
+
+  let expiresAt = null;
+  let expiryDisplay = '';
+  let remainingDays = null;
+  let status = 'not_set'; // not_set | invalid | expired | warning | ok
+
+  if (expiresStr) {
+    const parsed = new Date(expiresStr);
+    if (!isNaN(parsed.getTime())) {
+      expiresAt = parsed;
+      const now = new Date();
+      const diffMs = expiresAt.getTime() - now.getTime();
+      remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffMs <= 0) {
+        status = 'expired';
+      } else if (remainingDays <= 7) {
+        status = 'warning';
+      } else {
+        status = 'ok';
+      }
+      expiryDisplay = formatDateForDisplay_(expiresAt);
+    } else {
+      status = 'invalid';
+    }
+  }
+
+  return { username, expiresAt, expiryDisplay, remainingDays, status };
+}
+
+/**
+ * 「アカウント情報」メニューの作成
+ */
+function buildAccountInfoMenu_() {
+  try {
+    const ui = SpreadsheetApp.getUi();
+    const s = getAccountStatus_();
+
+    const accountLabel = `アカウント: ${s.username ? '@' + s.username : '未設定'}`;
+
+    let tokenLabel = 'トークン: 未設定';
+    if (s.status === 'invalid') {
+      tokenLabel = 'トークン: 不正な有効期限';
+    } else if (s.status === 'expired') {
+      tokenLabel = 'トークン: ⛔ 失効（要更新）';
+    } else if (s.status === 'warning') {
+      tokenLabel = `トークン: ${s.expiryDisplay}（⚠︎ 残 ${s.remainingDays} 日）`;
+    } else if (s.status === 'ok') {
+      tokenLabel = `トークン: ${s.expiryDisplay}（残 ${s.remainingDays} 日）`;
+    }
+
+    ui.createMenu('アカウント情報')
+      .addItem(accountLabel, 'showAccountStatus')
+      .addItem(tokenLabel, 'showAccountStatus')
+      .addSeparator()
+      .addItem('詳細を表示…', 'showAccountDetails')
+      .addItem('🔑 トークン更新/再認証', 'openTokenRenewal')
+      .addItem('状態を再取得', 'refreshMenu')
+      .addToUi();
+  } catch (e) {
+    console.error('アカウント情報メニュー作成エラー:', e);
+  }
+}
+
+/**
+ * 状態のサマリー表示（アラート）
+ */
+function showAccountStatus() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const s = getAccountStatus_();
+    let msg = `アカウント: ${s.username ? '@' + s.username : '未設定'}\n`;
+
+    if (s.status === 'not_set') {
+      msg += 'トークン: 未設定\n';
+    } else if (s.status === 'invalid') {
+      msg += 'トークン: 不正なトークン情報（要確認）\n';
+    } else if (s.status === 'expired') {
+      msg += 'トークン: ⛔ 失効（要更新）\n';
+    } else if (s.status === 'warning') {
+      msg += `トークン: ${s.expiryDisplay}（⚠︎ 残 ${s.remainingDays} 日）\n`;
+    } else {
+      msg += `トークン: ${s.expiryDisplay}（残 ${s.remainingDays} 日）\n`;
+    }
+
+    ui.alert('アカウント情報', msg, ui.ButtonSet.OK);
+    logOperation('アカウント情報表示', 'info', msg);
+  } catch (error) {
+    ui.alert('エラー', `アカウント情報の取得に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
+    logError('showAccountStatus', error);
+  }
+}
+
+/**
+ * 詳細の表示（モーダル）
+ */
+function showAccountDetails() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const s = getAccountStatus_();
+    const tz = Session.getScriptTimeZone() || 'Asia/Tokyo';
+    const now = new Date();
+    const nowDisp = formatDateForDisplay_(now);
+
+    let lines = [];
+    lines.push(`アカウント: ${s.username ? '@' + s.username : '未設定'}`);
+    if (s.status === 'not_set') {
+      lines.push('有効期限: 未設定');
+    } else if (s.status === 'invalid') {
+      lines.push('有効期限: 不正な値（要確認）');
+    } else {
+      lines.push(`有効期限: ${s.expiryDisplay}`);
+      lines.push(`残日数: ${s.remainingDays}`);
+      lines.push(`状態: ${s.status === 'expired' ? '失効' : s.status === 'warning' ? '警告' : '正常'}`);
+    }
+    lines.push(`現在時刻: ${nowDisp}（TZ: ${tz}）`);
+    
+    const html = HtmlService.createHtmlOutput(`
+      <div style="font-family: Arial, sans-serif; padding: 16px; line-height: 1.6;">
+        <h3 style="margin-top:0;">アカウント情報</h3>
+        <pre style="white-space: pre-wrap;">${lines.map(x => x.replace(/&/g,'&amp;').replace(/</g,'&lt;')).join('\n')}</pre>
+        <p style="color:#666;">※ 値は「基本設定」シートから取得しています。</p>
+      </div>
+    `).setWidth(420).setHeight(260);
+    ui.showModelessDialog(html, 'アカウント情報（詳細）');
+    logOperation('アカウント情報詳細表示', 'info', lines.join('\n'));
+  } catch (error) {
+    ui.alert('エラー', `詳細表示に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
+    logError('showAccountDetails', error);
+  }
+}
+
+/**
+ * メニューからトークン更新/再認証を実行
+ * - REFRESH_TOKENがある場合はリフレッシュ
+ * - なければOAuth認証フローを開始
+ */
+function openTokenRenewal() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const refreshToken = getConfig('REFRESH_TOKEN');
+    if (refreshToken) {
+      refreshAccessToken();
+      ui.alert('トークン更新', '新しいアクセストークンを取得しました。メニューを更新します。', ui.ButtonSet.OK);
+      refreshMenu();
+    } else {
+      ui.alert('再認証が必要です', 'REFRESH_TOKENが未設定のため、認証フローを開始します。', ui.ButtonSet.OK);
+      startOAuth();
+    }
+  } catch (error) {
+    ui.alert('エラー', `トークン更新に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
+    logError('openTokenRenewal', error);
   }
 }
 
@@ -1127,8 +1314,8 @@ function freezeExistingSheetHeaders() {
     '基本設定',
     '予約投稿',
     'リプライ追跡',
-    '自動返信キーワード設定',
-    '自動応答結果',
+    KEYWORD_SHEET_NAME,
+    REPLY_HISTORY_SHEET_NAME,
     'ログ'
   ];
   

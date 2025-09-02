@@ -8,7 +8,7 @@ function testRepliesPermissionDetailed() {
   
   console.log('===== 返信管理権限詳細テスト =====');
   
-  const config = validateConfig();
+  const config = RM_validateConfig();
   if (!config) {
     ui.alert('エラー', '認証情報が設定されていません', ui.ButtonSet.OK);
     return;
@@ -152,7 +152,7 @@ function testReplyCreationPermission() {
   
   console.log('===== 返信作成権限テスト =====');
   
-  const config = validateConfig();
+  const config = RM_validateConfig();
   if (!config) {
     ui.alert('エラー', '認証情報が設定されていません', ui.ButtonSet.OK);
     return;
@@ -197,7 +197,7 @@ function checkAccessTokenInfo() {
   
   console.log('===== アクセストークン情報確認 =====');
   
-  const config = validateConfig();
+  const config = RM_validateConfig();
   if (!config) {
     ui.alert('エラー', '認証情報が設定されていません', ui.ButtonSet.OK);
     return;

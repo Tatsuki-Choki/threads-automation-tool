@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <base target="_top">
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; padding: 16px; }
+      label { display: block; margin-top: 12px; font-weight: 600; }
+      select { width: 100%; padding: 6px; margin-top: 6px; }
+      .hint { color: #666; font-size: 12px; margin-top: 4px; }
+      .row { margin-top: 8px; }
+      .actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }
+      button { padding: 6px 12px; }
+      .warn { color: #b45309; font-size: 12px; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h3 style="margin:0 0 12px;">トリガーを再設定</h3>
+    <div class="row">
+      <label for="postInterval">予約投稿の実行間隔</label>
+      <select id="postInterval"></select>
+      <div class="hint">5〜60分（5分刻み）。60分は毎時に設定されます。</div>
+    </div>
+
+    <div class="row">
+      <label for="replyInterval">リプライ取得＋自動返信の実行間隔</label>
+      <select id="replyInterval"></select>
+      <div class="hint">30分、1時間、2時間、3時間、10分（非推奨）から選択できます。</div>
+    </div>
+
+    <div class="actions">
+      <button onclick="google.script.host.close()">キャンセル</button>
+      <button onclick="apply()">再設定する</button>
+    </div>
+
+    <script>
+      function populate() {
+        const postSel = document.getElementById('postInterval');
+        for (let m = 5; m <= 60; m += 5) {
+          const opt = document.createElement('option');
+          opt.value = String(m);
+          opt.textContent = m + ' 分';
+          postSel.appendChild(opt);
+        }
+        postSel.value = '5';
+
+        const replySel = document.getElementById('replyInterval');
+        // 明示的な選択肢: 30分, 1時間(60), 2時間(120), 3時間(180), 10分(非推奨)
+        const replyOptions = [
+          { value: 30, label: '30 分' },
+          { value: 60, label: '1 時間' },
+          { value: 120, label: '2 時間' },
+          { value: 180, label: '3 時間' },
+          { value: 10, label: '10 分（非推奨）' }
+        ];
+        replyOptions.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = String(o.value);
+          opt.textContent = o.label;
+          replySel.appendChild(opt);
+        });
+        replySel.value = '30';
+      }
+
+      function apply() {
+        const postInterval = parseInt(document.getElementById('postInterval').value, 10);
+        const replyInterval = parseInt(document.getElementById('replyInterval').value, 10);
+        const btns = document.querySelectorAll('button');
+        btns.forEach(b => b.disabled = true);
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.success) {
+              alert('トリガーを再設定しました\n\n' + res.message);
+              google.script.host.close();
+            } else {
+              alert('エラー: ' + (res && res.error ? res.error : '不明なエラー'));
+              btns.forEach(b => b.disabled = false);
+            }
+          })
+          .withFailureHandler(function(err){
+            alert('エラー: ' + err);
+            btns.forEach(b => b.disabled = false);
+          })
+          .applyAutomationTriggerSettings(postInterval, replyInterval);
+      }
+
+      populate();
+    </script>
+  </body>
+  </html>

@@ -19,7 +19,7 @@ function fetchRepliesAndAutoReply() {
     
     // 最終チェック時刻を取得
     const lastCheckTime = PropertiesService.getScriptProperties()
-      .getProperty('lastCommentCheck') || '0';
+      .getProperty('lastReplyCheck') || '0';
     
     const currentTime = Date.now();
     
@@ -30,7 +30,7 @@ function fetchRepliesAndAutoReply() {
     
     // 最終チェック時刻を更新
     PropertiesService.getScriptProperties()
-      .setProperty('lastCommentCheck', currentTime.toString());
+      .setProperty('lastReplyCheck', currentTime.toString());
     
     console.log('===== 統合処理完了 =====');
     logOperation('統合処理', 'success', 
@@ -180,66 +180,66 @@ function getMyRecentPosts(limit = 25) {
 // 特定の投稿のリプライを取得し、自動返信をチェック
 // ===========================
 function fetchRepliesForPostAndAutoReply(post, lastCheckTime) {
-  const accessToken = getConfig('ACCESS_TOKEN');
   let newCount = 0;
   let auto受信したリプライ = 0;
-  
+
   try {
-    // 簡素化されたフィールドのみ取得
+    const config = RM_validateConfig();
+    if (!config) return { newCount, auto受信したリプライ };
+
     const response = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${post.id}/replies?fields=id,text,username,timestamp,from`,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${config.accessToken}`
         },
         muteHttpExceptions: true
       }
     );
-    
+
     const result = JSON.parse(response.getContentText());
-    
+
     if (result.data) {
-      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('受信したリプライ');
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(REPLIES_SHEET_NAME);
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-      
+
       for (const reply of result.data) {
         try {
-          // 必須フィールドをチェック
           if (!reply.id || !reply.text) {
             console.log('不完全なリプライデータをスキップ:', reply);
             continue;
           }
-          
+
           const replyTime = new Date(reply.timestamp);
-          
+
           // 24時間以内のリプライのみ処理
           if (replyTime >= twentyFourHoursAgo) {
             const saveResult = saveReplyToSheet(reply, post, sheet);
-            if (saveResult === 'new') {
-              newCount++;
-            }
-            
-            // 新しいリプライかつ自動返信対象かチェック
+            if (saveResult === 'new') newCount++;
+
+            // 新しいリプライのみ判定
             if (replyTime.getTime() > parseInt(lastCheckTime)) {
-              console.log(`新しいリプライ発見: ${reply.from?.username || reply.username} - "${reply.text}"`);
-              console.log(`リプライ時刻: ${replyTime}, 最終チェック時刻: ${new Date(parseInt(lastCheckTime))}`);
-              
-              if (shouldReplyToComment(reply)) {
-                console.log(`自動返信対象: ${reply.from?.username || reply.username}`);
-                const replyResult = sendAutoReply(reply, reply.id);
-                if (replyResult) {
-                  auto受信したリプライ++;
-                  console.log(`自動返信送信成功: ${reply.from?.username || reply.username}`);
-                } else {
-                  console.log(`自動返信送信失敗: ${reply.from?.username || reply.username}`);
-                }
-              } else {
-                console.log(`自動返信対象外: ${reply.from?.username || reply.username}`);
+              const username = reply.from?.username || reply.username;
+              if (username === config.username) {
+                console.log('自分のリプライのためスキップ');
+                continue;
               }
-            } else {
-              console.log(`古いリプライ: ${reply.from?.username || reply.username} - "${reply.text}"`);
-              console.log(`リプライ時刻: ${replyTime}, 最終チェック時刻: ${new Date(parseInt(lastCheckTime))}`);
+
+              // 重複返信チェック
+              const userId = reply.from?.id || username;
+              if (RM_hasAlreadyRepliedToday(reply.id, userId)) {
+                console.log('本日既に返信済みのためスキップ');
+                continue;
+              }
+
+              const matchedKeyword = RM_findMatchingKeyword(reply.text);
+              if (matchedKeyword) {
+                const ok = RM_sendAutoReply(reply.id, reply, matchedKeyword, config);
+                if (ok) auto受信したリプライ++;
+              } else {
+                console.log('マッチするキーワードなし');
+              }
             }
           }
         } catch (replyError) {
@@ -248,11 +248,11 @@ function fetchRepliesForPostAndAutoReply(post, lastCheckTime) {
         }
       }
     }
-    
+
   } catch (error) {
     console.error(`投稿 ${post.id} のリプライ取得エラー:`, error);
   }
-  
+
   return { newCount, auto受信したリプライ };
 }
 
@@ -307,7 +307,7 @@ function fetchRepliesForPost(post) {
 // ===========================
 function saveReplyToSheet(reply, originalPost, sheet) {
   if (!sheet) {
-    sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('受信したリプライ');
+    sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(REPLIES_SHEET_NAME);
   }
   
   const dataRange = sheet.getDataRange();
@@ -413,13 +413,13 @@ function initializeRepliesSheet() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   
   // 既存のシートを削除
-  let existingSheet = spreadsheet.getSheetByName('受信したリプライ');
+  let existingSheet = spreadsheet.getSheetByName(REPLIES_SHEET_NAME);
   if (existingSheet) {
     spreadsheet.deleteSheet(existingSheet);
   }
   
   // 新しいシートを作成
-  const sheet = spreadsheet.insertSheet('受信したリプライ');
+  const sheet = spreadsheet.insertSheet(REPLIES_SHEET_NAME);
   
   // ヘッダー行を設定（簡素化されたカラム）
   const headers = [
@@ -574,7 +574,7 @@ function testIntegratedReplyAndAutoReply() {
       console.log('===== 統合処理テスト開始 =====');
       
       // 最終チェック時刻をリセット（テスト用）
-      PropertiesService.getScriptProperties().setProperty('lastCommentCheck', '0');
+      PropertiesService.getScriptProperties().setProperty('lastReplyCheck', '0');
       
       // 統合処理を実行
       fetchRepliesAndAutoReply();
