@@ -509,12 +509,13 @@ function showWebhookSettings() {
 // ===========================
 
 /**
- * UrlFetchApp.fetchのラッパー関数。呼び出し回数をカウントする。
+ * UrlFetchApp.fetchのラッパー関数（計数のみ）。
+ * 強化版 fetchWithTracking（ApiUtilities.js）と衝突しないよう別名に変更。
  * @param {string} url 取得するURL
  * @param {object} params UrlFetchApp.fetchに渡すパラメータ
  * @return {GoogleAppsScript.URL_Fetch.HTTPResponse} UrlFetchApp.fetchのレスポンス
  */
-function fetchWithTracking(url, params) {
+function fetchWithCountOnly(url, params) {
   const properties = PropertiesService.getScriptProperties();
   const today = new Date().toLocaleDateString('ja-JP');
   

@@ -217,7 +217,7 @@ function buildAccountInfoMenu_() {
       .addItem(tokenLabel, 'showAccountStatus')
       .addSeparator()
       .addItem('詳細を表示…', 'showAccountDetails')
-      .addItem('🔑 トークン更新/再認証', 'openTokenRenewal')
+      .addItem('🔑 再認証（長期トークン更新）', 'openTokenRenewal')
       .addItem('状態を再取得', 'refreshMenu')
       .addToUi();
   } catch (e) {
@@ -275,6 +275,13 @@ function showAccountDetails() {
       lines.push(`有効期限: ${s.expiryDisplay}`);
       lines.push(`残日数: ${s.remainingDays}`);
       lines.push(`状態: ${s.status === 'expired' ? '失効' : s.status === 'warning' ? '警告' : '正常'}`);
+      // 公式のdebug_tokenで確認できれば併記
+      const dbg = fetchTokenDebugInfo_();
+      if (dbg && dbg.expires_at) {
+        const dbgDate = new Date(dbg.expires_at * 1000);
+        const dbgDisp = formatDateForDisplay_(dbgDate);
+        lines.push(`公式有効期限 (debug_token): ${dbgDisp}`);
+      }
     }
     lines.push(`現在時刻: ${nowDisp}（TZ: ${tz}）`);
     
@@ -301,15 +308,8 @@ function showAccountDetails() {
 function openTokenRenewal() {
   const ui = SpreadsheetApp.getUi();
   try {
-    const refreshToken = getConfig('REFRESH_TOKEN');
-    if (refreshToken) {
-      refreshAccessToken();
-      ui.alert('トークン更新', '新しいアクセストークンを取得しました。メニューを更新します。', ui.ButtonSet.OK);
-      refreshMenu();
-    } else {
-      ui.alert('再認証が必要です', 'REFRESH_TOKENが未設定のため、認証フローを開始します。', ui.ButtonSet.OK);
-      startOAuth();
-    }
+    ui.alert('再認証', '認証ページを開きます。完了後に長期トークンへ更新されます。', ui.ButtonSet.OK);
+    startOAuth();
   } catch (error) {
     ui.alert('エラー', `トークン更新に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
     logError('openTokenRenewal', error);
@@ -497,7 +497,7 @@ function startOAuth() {
   const authUrl = `https://threads.net/oauth/authorize?` +
     `client_id=${clientId}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=threads_basic,threads_content_publish,threads_read_replies,threads_manage_insights` +
+    `&scope=threads_basic,threads_publish,threads_manage_replies,threads_read_replies,threads_manage_insights` +
     `&response_type=code`;
   
   const htmlOutput = HtmlService.createHtmlOutput(`
@@ -628,7 +628,8 @@ function exchangeForLongLivedToken(shortLivedToken) {
     
     if (result.access_token) {
       setConfig('ACCESS_TOKEN', result.access_token);
-      setConfig('TOKEN_EXPIRES', new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString());
+      const expiresInSec = typeof result.expires_in === 'number' ? result.expires_in : 60 * 24 * 60 * 60; // fallback 60日
+      setConfig('TOKEN_EXPIRES', new Date(Date.now() + expiresInSec * 1000).toISOString());
       
       // ユーザー情報の取得
       getUserInfo(result.access_token);
@@ -638,6 +639,27 @@ function exchangeForLongLivedToken(shortLivedToken) {
   } catch (error) {
     logError('exchangeForLongLivedToken', error);
   }
+}
+
+/**
+ * 公式のdebug_tokenで有効期限を確認（任意呼び出し）
+ * @return {Object|null} { expires_at:number, scopes?:string[] }
+ */
+function fetchTokenDebugInfo_() {
+  try {
+    const accessToken = getConfig('ACCESS_TOKEN');
+    const clientId = getConfig('CLIENT_ID');
+    const clientSecret = getConfig('CLIENT_SECRET');
+    if (!accessToken || !clientId || !clientSecret) return null;
+    const appToken = `${clientId}|${clientSecret}`;
+    const url = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
+    const resp = fetchWithTracking(url, { muteHttpExceptions: true });
+    const data = JSON.parse(resp.getContentText());
+    if (data && data.data) return { expires_at: data.data.expires_at, scopes: data.data.scopes };
+  } catch (e) {
+    // 失敗時は無視
+  }
+  return null;
 }
 
 // ===========================

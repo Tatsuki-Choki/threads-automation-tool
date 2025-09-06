@@ -228,6 +228,14 @@ function processScheduledPosts() {
   console.log('===== processScheduledPosts 開始 =====');
   logOperation('予約投稿処理', 'start', `実行開始時刻: ${new Date().toLocaleString('ja-JP')}`);
   
+  // 排他ロック（並行実行防止）
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) { // 最大20秒待機
+    console.log('他の実行中のためスキップ');
+    logOperation('予約投稿処理', 'warning', 'ロック取得できずスキップ');
+    return;
+  }
+
   try {
     // API制限チェック（本日のAPI使用状況を確認）
     const dailyQuota = checkDailyAPIQuota();
@@ -263,10 +271,12 @@ function processScheduledPosts() {
     Object.entries(postGroups).forEach(([groupId, groupPosts]) => {
       try {
         if (groupPosts.length === 1 && !groupPosts[0].treeId) {
-          // 単発投稿
+          // 単発投稿: 先に処理中へ
+          updatePostStatus(groupPosts[0].row, 'processing', null, null);
           processPost(groupPosts[0]);
         } else {
-          // ツリー投稿
+          // ツリー投稿: 全行を先に処理中へ
+          groupPosts.forEach(p => updatePostStatus(p.row, 'processing', null, null));
           processTreePosts(groupPosts);
         }
       } catch (error) {
@@ -289,6 +299,8 @@ function processScheduledPosts() {
     
   } catch (error) {
     logError('processScheduledPosts', error);
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
@@ -505,6 +517,18 @@ function processPost(post) {
   }
   
   let result;
+
+  // 二重送信防止（冪等チェック）
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('予約投稿');
+    const currentStatus = sheet.getRange(post.row, 5).getValue();
+    const currentUrl = sheet.getRange(post.row, 6).getValue();
+    if ((currentStatus === '投稿済' || currentStatus === 'posted' || currentStatus === 'published') && currentUrl) {
+      return { success: true, postUrl: currentUrl, postId: extractPostIdFromUrl(String(currentUrl)) };
+    }
+  } catch (e) {
+    // 読み取り失敗時は続行
+  }
   
   // 返信先IDがある場合（ツリー投稿の2番目以降）
   if (post.replyToId) {
@@ -1004,6 +1028,18 @@ function publishPost(containerId) {
 }
 
 // ===========================
+// 投稿URLからID抽出（冪等チェック用）
+// ===========================
+function extractPostIdFromUrl(url) {
+  try {
+    const m = String(url).match(/\/post\/([^\/?#]+)/);
+    return m ? m[1] : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ===========================
 // 返信投稿（テキストのみ）
 // ===========================
 function postReplyTextOnly(text, replyToId) {
@@ -1198,6 +1234,7 @@ function updatePostStatus(row, status, postUrl, error, retryCount) {
   // ステータスを日本語に変換
   const statusMap = {
     'pending': '投稿予約中',
+    'processing': '処理中',
     'posted': '投稿済',
     'published': '投稿済',
     'failed': '失敗',
@@ -1409,40 +1446,11 @@ function manualPostExecution() {
 // アクセストークンリフレッシュ
 // ===========================
 function refreshAccessToken() {
-  const refreshToken = getConfig('REFRESH_TOKEN');
-  const clientId = getConfig('CLIENT_ID');
-  const clientSecret = getConfig('CLIENT_SECRET');
-  
-  if (!refreshToken) {
-    logError('refreshAccessToken', 'リフレッシュトークンが見つかりません');
-    return;
-  }
-  
+  // Threads APIはrefresh_tokenによる延長を提供しないため、再認証に誘導
   try {
-    const response = fetchWithTracking(
-      'https://graph.threads.net/oauth/access_token',
-      {
-        method: 'POST',
-        payload: {
-          grant_type: 'refresh_token',
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken
-        },
-        muteHttpExceptions: true
-      }
-    );
-    
-    const result = JSON.parse(response.getContentText());
-    
-    if (result.access_token) {
-      setConfig('ACCESS_TOKEN', result.access_token);
-      setConfig('TOKEN_EXPIRES', new Date(Date.now() + result.expires_in * 1000).toISOString());
-      logOperation('トークンリフレッシュ', 'success', '新しいトークンを取得');
-    } else {
-      throw new Error(result.error?.message || 'トークンリフレッシュ失敗');
-    }
-    
+    const ui = SpreadsheetApp.getUi();
+    ui.alert('再認証が必要です', 'Threadsの長期トークン更新は再認証で行います。認証画面を開きます。', ui.ButtonSet.OK);
+    if (typeof startOAuth === 'function') startOAuth();
   } catch (error) {
     logError('refreshAccessToken', error);
   }

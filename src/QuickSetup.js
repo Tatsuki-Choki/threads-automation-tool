@@ -62,8 +62,7 @@ function quickSetupWithExistingToken() {
       'トリガー設定',
       'デフォルト設定でトリガーを作成しますか？\n\n' +
       '• 予約投稿: 5分ごと\n' +
-      '• 返信取得: 30分ごと\n' +
-      '• トークン更新: 毎日午前3時\n\n' +
+      '• 返信取得: 30分ごと\n\n' +
       '※既存のトリガーは削除され、実行者が新しいトリガーの所有者になります。\n' +
       '（後でメニューから変更可能です）',
       ui.ButtonSet.YES_NO
@@ -188,15 +187,8 @@ function setupDefaultTriggers() {
       .everyMinutes(replyInterval)
       .create();
     
-    // トークンリフレッシュ用トリガー（毎日午前3時）
-    ScriptApp.newTrigger('refreshAccessToken')
-      .timeBased()
-      .everyDays(1)
-      .atHour(tokenHour)
-      .create();
-    
     logOperation('デフォルトトリガー設定', 'success', 
-      `投稿:${postInterval}分, リプライ:${replyInterval}分, トークン:${tokenHour}時`);
+      `投稿:${postInterval}分, リプライ:${replyInterval}分`);
     
   } catch (error) {
     logError('setupDefaultTriggers', error);
