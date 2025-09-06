@@ -441,18 +441,16 @@ function resetAutoReplyKeywordsSheet() {
   
   const response = ui.alert(
     'キーワード設定シート再構成',
-    'キーワード設定シートを削除して再作成しますか？\n\n' +
-    '⚠️ 既存のキーワード設定はすべて削除されます。\n' +
-    '新しいシートには最新の形式とサンプルデータが含まれます。',
+    '既存の入力値は保持したまま、レイアウトと機能を最新化します。\n\n' +
+    '・列構成、検証、条件付き書式、デザインを更新\n' +
+    '・B列「キーワード」は書式なしテキストに設定',
     ui.ButtonSet.YES_NO
   );
   
   if (response == ui.Button.YES) {
     try {
-      initializeKeywordSettingsSheet();
-      ui.alert('キーワード設定シートを再構成しました。\n\n' +
-        'サンプルキーワードが追加されています。\n' +
-        '必要に応じて編集してください。');
+      rebuildKeywordSettingsSheetNonDestructive_();
+      ui.alert('キーワード設定シートを再構成しました（既存データは保持されました）。');
     } catch (error) {
       console.error('キーワード設定シート再構成エラー:', error);
       ui.alert('エラーが発生しました: ' + error.message);
@@ -466,13 +464,14 @@ function resetAutoReplyKeywordsSheet() {
 function initializeKeywordSettingsSheet() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 既存のシートを削除
-  let existingSheet = spreadsheet.getSheetByName('キーワード設定');
+  // 非破壊方式へ移行
+  const existingSheet = spreadsheet.getSheetByName('キーワード設定');
   if (existingSheet) {
-    spreadsheet.deleteSheet(existingSheet);
+    rebuildKeywordSettingsSheetNonDestructive_();
+    return;
   }
   
-  // 新しいシートを作成
+  // 新しいシートを作成（初回のみサンプルを投入）
   const sheet = spreadsheet.insertSheet('キーワード設定');
   
   // ヘッダー行を設定
@@ -493,6 +492,9 @@ function initializeKeywordSettingsSheet() {
     .setBackground('#E0E0E0')
     .setFontColor('#000000')
     .setFontWeight('bold');
+  
+  // B列（キーワード）を書式なしテキストへ
+  sheet.getRange(1, 2, sheet.getMaxRows(), 1).setNumberFormat('@');
   
   // サンプルデータを追加
   const sampleData = [
@@ -567,6 +569,136 @@ function initializeKeywordSettingsSheet() {
   sheet.setFrozenRows(1);
   
   logOperation('キーワード設定シート初期化', 'success', 'シートを再構成しました');
+}
+
+// ===========================
+// キーワード設定シート: 非破壊再構成
+// ===========================
+function rebuildKeywordSettingsSheetNonDestructive_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const name = 'キーワード設定';
+  const oldSheet = ss.getSheetByName(name);
+  
+  const desiredHeaders = ['ID', 'キーワード', 'マッチタイプ', '返信内容', '有効/無効', '優先度', '確率(%)'];
+  
+  if (!oldSheet) {
+    // 既存がなければ通常初期化
+    initializeKeywordSettingsSheet();
+    return;
+  }
+  
+  // 旧データ読み込み
+  const oldValues = oldSheet.getDataRange().getValues();
+  const oldHeaders = (oldValues.length > 0) ? oldValues[0].map(h => (h || '').toString()) : [];
+  
+  // 追加列（未知列）を検出
+  const unknownHeaders = [];
+  for (let c = 0; c < oldHeaders.length; c++) {
+    const h = oldHeaders[c] || '';
+    if (h && desiredHeaders.indexOf(h) === -1) {
+      unknownHeaders.push(h);
+    }
+  }
+  
+  const newHeaders = desiredHeaders.concat(unknownHeaders);
+  
+  // TMPシートを作成
+  const tmpName = `${name}_TMP`;
+  const tmpSheet = ss.getSheetByName(tmpName) ? ss.getSheetByName(tmpName) : ss.insertSheet(tmpName);
+  tmpSheet.clear();
+  
+  // ヘッダー設定
+  tmpSheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+  tmpSheet.getRange(1, 1, 1, newHeaders.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  tmpSheet.setFrozenRows(1);
+  
+  // 列幅（既存トンマナ）
+  tmpSheet.setColumnWidth(1, 50);   // ID
+  tmpSheet.setColumnWidth(2, 150);  // キーワード
+  tmpSheet.setColumnWidth(3, 100);  // マッチタイプ
+  tmpSheet.setColumnWidth(4, 400);  // 返信内容
+  tmpSheet.setColumnWidth(5, 80);   // 有効/無効
+  tmpSheet.setColumnWidth(6, 60);   // 優先度
+  tmpSheet.setColumnWidth(7, 80);   // 確率(%)
+  
+  // B列（キーワード）を書式なしテキストへ
+  tmpSheet.getRange(1, 2, tmpSheet.getMaxRows(), 1).setNumberFormat('@');
+  
+  // データを新レイアウトへ再配置
+  const newRows = [];
+  const oldHeaderIndexMap = {};
+  for (let i = 0; i < oldHeaders.length; i++) {
+    oldHeaderIndexMap[oldHeaders[i]] = i;
+  }
+  
+  for (let r = 1; r < oldValues.length; r++) {
+    const oldRow = oldValues[r];
+    if (!oldRow || oldRow.length === 0) continue;
+    const newRow = new Array(newHeaders.length).fill('');
+    for (let c = 0; c < newHeaders.length; c++) {
+      const header = newHeaders[c];
+      if (oldHeaderIndexMap.hasOwnProperty(header)) {
+        const oldIdx = oldHeaderIndexMap[header];
+        newRow[c] = oldRow[oldIdx];
+      }
+    }
+    newRows.push(newRow);
+  }
+  
+  if (newRows.length > 0) {
+    tmpSheet.getRange(2, 1, newRows.length, newHeaders.length).setValues(newRows);
+  }
+  
+  // 検証再適用（マッチタイプ / 有効列）
+  const lastRow = Math.max(2, tmpSheet.getLastRow());
+  const matchTypeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['完全一致', '部分一致', '正規表現'])
+    .setAllowInvalid(false)
+    .build();
+  tmpSheet.getRange(2, 3, Math.max(0, lastRow - 1), 1).setDataValidation(matchTypeRule);
+  
+  const enabledRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([true, false])
+    .setAllowInvalid(false)
+    .build();
+  tmpSheet.getRange(2, 5, Math.max(0, lastRow - 1), 1).setDataValidation(enabledRule);
+  
+  // 条件付き書式（有効/無効）
+  const enabledRange = tmpSheet.getRange(2, 5, 1000, 1);
+  const enabledRule1 = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('TRUE')
+    .setBackground('#FFFFFF')
+    .setFontColor('#000000')
+    .setRanges([enabledRange])
+    .build();
+  const enabledRule2 = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('FALSE')
+    .setBackground('#F5F5F5')
+    .setFontColor('#FF0000')
+    .setRanges([enabledRange])
+    .build();
+  tmpSheet.setConditionalFormatRules([enabledRule1, enabledRule2]);
+  
+  // 説明ノート
+  tmpSheet.getRange('A1').setNote(
+    '自動返信キーワードの設定シート\n\n' +
+    'ID: 一意の識別番号\n' +
+    'キーワード: 検索するキーワード（B列は書式なしテキスト）\n' +
+    'マッチタイプ: 完全一致、部分一致、正規表現\n' +
+    '返信内容: 自動返信するメッセージ（{username}, {time}, {date}が使用可能）\n' +
+    '有効/無効: TRUE/FALSEで有効/無効を設定\n' +
+    '優先度: 数値が小さいほど優先度が高い\n' +
+    '確率(%): 同じ優先度の中でこのキーワードが選ばれる確率（1-100）'
+  );
+  
+  // 旧→新の切り替え
+  ss.deleteSheet(oldSheet);
+  tmpSheet.setName(name);
+  
+  logOperation('キーワード設定シート再構成（非破壊）', 'success', `行数: ${newRows.length}`);
 }
 
 // ===========================

@@ -47,8 +47,11 @@ function quickSetupWithExistingToken() {
       }
     }
     
-    // 3. トークンの有効期限設定（推定）
-    setConfig('TOKEN_EXPIRES', new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString());
+    // 3. トークンの有効期限同期（公式debug_tokenから取得）
+    const synced = updateTokenExpiryFromDebugToken_();
+    if (!synced) {
+      ui.alert('注意', '公式のトークン有効期限を取得できませんでした。CLIENT_ID/CLIENT_SECRETの設定とトークンの有効性をご確認ください。', ui.ButtonSet.OK);
+    }
     
     // 4. スクリプトIDを基本設定に追加
     const scriptId = ScriptApp.getScriptId();

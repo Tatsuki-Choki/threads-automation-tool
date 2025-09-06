@@ -629,9 +629,13 @@ function exchangeForLongLivedToken(shortLivedToken) {
     
     if (result.access_token) {
       setConfig('ACCESS_TOKEN', result.access_token);
-      const expiresInSec = typeof result.expires_in === 'number' ? result.expires_in : 60 * 24 * 60 * 60; // fallback 60日
-      setConfig('TOKEN_EXPIRES', new Date(Date.now() + expiresInSec * 1000).toISOString());
-      
+      if (typeof result.expires_in === 'number') {
+        setConfig('TOKEN_EXPIRES', new Date(Date.now() + result.expires_in * 1000).toISOString());
+      }
+
+      // 公式debug_tokenで有効期限を最終確定
+      updateTokenExpiryFromDebugToken_();
+
       // ユーザー情報の取得
       getUserInfo(result.access_token);
       
@@ -661,6 +665,31 @@ function fetchTokenDebugInfo_() {
     // 失敗時は無視
   }
   return null;
+}
+
+/**
+ * debug_tokenのexpires_atからTOKEN_EXPIRESを同期
+ * @return {boolean} 同期に成功したか
+ */
+function updateTokenExpiryFromDebugToken_() {
+  try {
+    const accessToken = getConfig('ACCESS_TOKEN');
+    const clientId = getConfig('CLIENT_ID');
+    const clientSecret = getConfig('CLIENT_SECRET');
+    if (!accessToken || !clientId || !clientSecret) return false;
+    const appToken = `${clientId}|${clientSecret}`;
+    const url = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
+    const resp = fetchWithTracking(url, { muteHttpExceptions: true });
+    const data = JSON.parse(resp.getContentText());
+    if (data && data.data && data.data.expires_at) {
+      const expiresISO = new Date(data.data.expires_at * 1000).toISOString();
+      setConfig('TOKEN_EXPIRES', expiresISO);
+      return true;
+    }
+  } catch (e) {
+    // 無視（呼び出し側で必要に応じて通知）
+  }
+  return false;
 }
 
 // ===========================
