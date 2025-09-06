@@ -98,6 +98,7 @@ function onOpen() {
     .addItem('⏰ トリガーを再設定', 'resetAutomationTriggers')
     .addSeparator()
     .addItem('📤 手動投稿実行', 'manualPostExecution')
+    .addItem('🧵 最新投稿50件を取得', 'fetchLatestThreadsPosts')
     .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
     .addItem('🔄 自動返信のみ', 'manualAutoReply')
     .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
@@ -973,6 +974,102 @@ function getUserInfo(accessToken) {
   } catch (error) {
     logError('getUserInfo', error);
   }
+}
+
+// ===========================
+// 最新投稿50件取得（シート出力）
+// ===========================
+function fetchLatestThreadsPosts() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const accessToken = getConfig('ACCESS_TOKEN');
+    const userId = getConfig('USER_ID');
+    const username = getConfig('USERNAME');
+    if (!accessToken || !userId) {
+      ui.alert('エラー', '基本設定の ACCESS_TOKEN / USER_ID が未設定です。', ui.ButtonSet.OK);
+      return;
+    }
+
+    // まずシートを用意
+    const sheet = resetLatestPostsSheet_();
+
+    // 取得: 最大50件（paging対応: 念のため2ページ目まで）
+    const perPage = 50; // APIのlimitを50に
+    let collected = [];
+    let url = `${THREADS_API_BASE}/v1.0/${userId}/threads?fields=id,text,timestamp,media_type,media_url,permalink&limit=${perPage}`;
+
+    for (let page = 0; page < 2 && collected.length < 50; page++) {
+      const resp = fetchWithTracking(url, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+        muteHttpExceptions: true
+      });
+      const json = JSON.parse(resp.getContentText());
+      if (json.error) {
+        throw new Error(json.error.message || 'APIエラー');
+      }
+      const data = Array.isArray(json.data) ? json.data : [];
+      collected = collected.concat(data);
+      if (collected.length >= 50 || !json.paging || !json.paging.next) break;
+      url = json.paging.next;
+    }
+    collected = collected.slice(0, 50);
+
+    // 表示用データ整形
+    const rows = collected.map(item => {
+      const id = item.id || '';
+      const text = item.text || '';
+      const mediaType = item.media_type || '';
+      const mediaUrl = item.media_url || '';
+      const permalink = item.permalink || (username ? `https://www.threads.net/@${username}/post/${id}` : '');
+      const ts = item.timestamp ? new Date(item.timestamp) : new Date();
+      const tsJst = Utilities.formatDate(ts, 'JST', 'yyyy/MM/dd HH:mm:ss');
+      const fetchedAt = Utilities.formatDate(new Date(), 'JST', 'yyyy/MM/dd HH:mm:ss');
+      return [id, text, mediaType, mediaUrl, permalink, tsJst, fetchedAt];
+    });
+
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, 7).setValues(rows);
+      // 自動列幅調整（必要列のみ）
+      sheet.setColumnWidth(1, 220); // ID
+      sheet.setColumnWidth(2, 500); // 本文
+      sheet.setColumnWidth(3, 120); // メディアタイプ
+      sheet.setColumnWidth(4, 320); // メディアURL
+      sheet.setColumnWidth(5, 320); // 投稿URL
+      sheet.setColumnWidth(6, 160); // 投稿日時
+      sheet.setColumnWidth(7, 160); // 取得時刻
+    }
+
+    ui.alert('完了', `最新投稿を ${rows.length} 件取得しました。`, ui.ButtonSet.OK);
+    logOperation('最新投稿取得', 'success', `${rows.length}件取得`);
+  } catch (error) {
+    logError('fetchLatestThreadsPosts', error);
+    SpreadsheetApp.getUi().alert('エラー', error.toString(), SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
+
+function resetLatestPostsSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const name = '最新投稿';
+  const existing = ss.getSheetByName(name);
+  if (existing) ss.deleteSheet(existing);
+  const sheet = ss.insertSheet(name);
+
+  const headers = ['ID', '本文', 'メディアタイプ', 'メディアURL', '投稿URL', '投稿日時(JST)', '取得時刻(JST)'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  // 説明ノート
+  sheet.getRange('A1').setNote(
+    '直近の投稿一覧\n' +
+    '・本文やURLは取得時の状態です\n' +
+    '・投稿日時はJSTで表示'
+  );
+
+  return sheet;
 }
 
 
