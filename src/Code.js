@@ -7,6 +7,7 @@
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 const THREADS_API_BASE = 'https://graph.threads.net';
 const LOG_MAX_ENTRIES = 150; // ログシートの最大保持件数（ヘッダー除く）
+const GLOBAL_PAUSE_FLAG_KEY = 'GLOBAL_AUTOMATION_PAUSED';
 
 // シート名の定数（全体で統一）
 const KEYWORD_SHEET_NAME = 'キーワード設定';
@@ -103,6 +104,10 @@ function onOpen() {
     .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
     .addItem('🔄 自動返信のみ', 'manualAutoReply')
     .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
+    .addSeparator()
+    .addItem('⏸ 自動処理を一時停止', 'pauseAllAutomation')
+    .addItem('▶ 自動処理を再開', 'resumeAllAutomation')
+    .addItem('🛑 全機能停止（即時）', 'stopAllAutomationNow')
     .addSeparator()
     .addItem('🧪 自動返信テスト', 'simulateAutoReply')
     .addItem('🧪 設定テスト', 'testConfiguration')
@@ -847,6 +852,30 @@ function disableAllAutomationTriggers() {
   } catch (error) {
     logError('disableAllAutomationTriggers', error);
     ui.alert('エラー', 'トリガー削除中にエラーが発生しました:\n' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// 全機能停止（即時）
+// ===========================
+function stopAllAutomationNow() {
+  const ui = SpreadsheetApp.getUi();
+  const yes = ui.alert('全機能停止', 'トリガーをすべて削除し、以後の自動処理を停止します。実行しますか？', ui.ButtonSet.YES_NO);
+  if (yes !== ui.Button.YES) return;
+  try {
+    // 1) 全トリガー削除
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(tr => {
+      try { ScriptApp.deleteTrigger(tr); } catch (e) {}
+    });
+    // 2) グローバル停止フラグをtrue
+    PropertiesService.getScriptProperties().setProperty(GLOBAL_PAUSE_FLAG_KEY, 'true');
+    // 3) 完了
+    logOperation('全機能停止', 'success', 'Triggers deleted, paused=true');
+    ui.alert('停止完了', '全トリガーを削除し、以後の自動処理を停止しました。', ui.ButtonSet.OK);
+  } catch (error) {
+    logError('stopAllAutomationNow', error);
+    ui.alert('エラー', error.toString(), ui.ButtonSet.OK);
   }
 }
 

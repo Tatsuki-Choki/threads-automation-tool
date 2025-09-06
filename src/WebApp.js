@@ -18,6 +18,15 @@ const WEBHOOK_CONFIG = {
 // メインWebhookエンドポイント
 // ===========================
 function doPost(e) {
+  // 一時停止中なら即OK返却（Metaの再送防止のため200を返す）
+  try {
+    const paused = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED') === 'true';
+    if (paused) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: 'paused' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  } catch (err) {}
   try {
     console.log('===== Webhook受信 =====');
     

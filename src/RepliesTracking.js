@@ -81,6 +81,14 @@ function fetchRepliesAndCheckAutoReply(lastCheckTime) {
 // リプライ取得メイン処理
 // ===========================
 function fetchAndSaveReplies() {
+  // 一時停止中ならスキップ
+  try {
+    const paused = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED') === 'true';
+    if (paused) {
+      console.log('グローバル一時停止中のため、リプライ取得をスキップ');
+      return;
+    }
+  } catch (e) {}
   try {
     const accessToken = getConfig('ACCESS_TOKEN');
     const userId = getConfig('USER_ID');

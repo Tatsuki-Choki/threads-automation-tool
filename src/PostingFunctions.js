@@ -224,6 +224,15 @@ function initializeScheduledPostsSheet() {
 // 予約投稿処理
 // ===========================
 function processScheduledPosts() {
+  // 一時停止中ならスキップ
+  try {
+    const flag = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED');
+    const paused = (flag === null || flag === '' || flag === 'true');
+    if (paused) {
+      console.log('グローバル一時停止中のため、予約投稿処理をスキップ');
+      return;
+    }
+  } catch (e) {}
   // 必ず実行開始をログに記録
   console.log('===== processScheduledPosts 開始 =====');
   logOperation('予約投稿処理', 'start', `実行開始時刻: ${new Date().toLocaleString('ja-JP')}`);

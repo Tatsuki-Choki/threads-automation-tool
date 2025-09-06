@@ -4,6 +4,14 @@
 // メイン自動返信処理
 // ===========================
 function autoReplyToThreads() {
+  // 一時停止中ならスキップ
+  try {
+    const paused = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED') === 'true';
+    if (paused) {
+      console.log('グローバル一時停止中のため、自動返信をスキップ');
+      return;
+    }
+  } catch (e) {}
   try {
     const config = RM_validateConfig();
     if (!config) return;
@@ -629,6 +637,14 @@ function manualBackfill6Hours() {
 // 統合実行用（リプライ取得＋自動返信）
 // ===========================
 function fetchAndAutoReply() {
+  // 一時停止中ならスキップ
+  try {
+    const paused = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED') === 'true';
+    if (paused) {
+      console.log('グローバル一時停止中のため、統合処理をスキップ');
+      return;
+    }
+  } catch (e) {}
   console.log('===== 統合処理開始 =====');
   
   // API制限チェック
