@@ -96,6 +96,7 @@ function onOpen() {
     .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
     .addSeparator()
     .addItem('⏰ トリガーを再設定', 'resetAutomationTriggers')
+    .addItem('🛑 すべてのトリガーを停止', 'disableAllAutomationTriggers')
     .addSeparator()
     .addItem('📤 手動投稿実行', 'manualPostExecution')
     .addItem('🧵 最新投稿50件を取得', 'fetchLatestThreadsPosts')
@@ -816,6 +817,36 @@ function applyAutomationTriggerSettings(postIntervalMinutes, replyIntervalMinute
   } catch (error) {
     logError('applyAutomationTriggerSettings', error);
     return { success: false, error: error.toString() };
+  }
+}
+
+// ===========================
+// すべてのトリガーを停止
+// ===========================
+function disableAllAutomationTriggers() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    'すべてのトリガーを停止',
+    'このスクリプトに設定された全ての時間ベース/シートベースのトリガーを削除します。よろしいですか？',
+    ui.ButtonSet.YES_NO
+  );
+  if (response !== ui.Button.YES) return;
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    let deleted = 0;
+    triggers.forEach(tr => {
+      try {
+        ScriptApp.deleteTrigger(tr);
+        deleted++;
+      } catch (e) {
+        console.error('トリガー削除エラー:', tr.getHandlerFunction(), e);
+      }
+    });
+    ui.alert('完了', `${deleted} 個のトリガーを削除しました。`, ui.ButtonSet.OK);
+    logOperation('すべてのトリガー停止', 'success', `${deleted}個削除`);
+  } catch (error) {
+    logError('disableAllAutomationTriggers', error);
+    ui.alert('エラー', 'トリガー削除中にエラーが発生しました:\n' + error.toString(), ui.ButtonSet.OK);
   }
 }
 

@@ -34,7 +34,10 @@
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
       "mcp__playwright__browser_evaluate",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__onboarding",
+      "mcp__filesystem__directory_tree"
     ],
     "deny": []
   }
