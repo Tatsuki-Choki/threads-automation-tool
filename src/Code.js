@@ -143,23 +143,147 @@ function testFunction() {
 }
 
 // ===========================
-// Google Drive URL変換テスト
+// メニュー再読み込み
 // ===========================
-function testDriveUrlConversion() {
+function refreshMenu() {
   const ui = SpreadsheetApp.getUi();
 
-  const response = ui.prompt(
-    'Google Drive URL変換テスト',
-    'テストするGoogle DriveのURLを入力してください:\n\n' +
-    '例: https://drive.google.com/file/d/1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe/view?usp=sharing',
-    ui.ButtonSet.OK_CANCEL
-  );
+  try {
+    // 既存のメニューをクリア（Google Apps Scriptでは直接削除できないので注意）
+    // 代わりにonOpen関数を再実行してメニューを再構築
 
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
+    // まず現在のメニューをクリア
+    try {
+      ui.removeMenu('🔒 管理者用');
+    } catch (e) {}
+    try {
+      ui.removeMenu('Threads自動化');
+    } catch (e) {}
+    try {
+      ui.removeMenu('アカウント情報');
+    } catch (e) {}
+
+    // onOpen関数を再実行してメニューを再構築
+    onOpen();
+
+    ui.alert('メニュー更新完了', 'メニューを更新しました。', ui.ButtonSet.OK);
+
+  } catch (error) {
+    console.error('メニュー再読み込みエラー:', error);
+    ui.alert('エラー', 'メニュー再読み込みに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// Google Drive ファイルID直接テスト
+// ===========================
+function testDriveUrlWithFileId(fileId) {
+  const ui = SpreadsheetApp.getUi();
+
+  // ファイルIDが指定されていない場合はユーザーのものを使用
+  if (!fileId) {
+    fileId = '1iXaD49YSZePJqRhN1_cKfmW4dNAZYQzWEOEItp2Zvl6SWOF9QMMvSJhV';
   }
 
-  const testUrl = response.getResponseText().trim();
+  console.log('=== Google DriveファイルIDテスト開始 ===');
+  console.log('テスト対象ファイルID:', fileId);
+
+  try {
+    // ファイルアクセステスト
+    const file = DriveApp.getFileById(fileId);
+    const fileName = file.getName();
+    const mimeType = file.getMimeType();
+    const size = file.getSize();
+
+    console.log('ファイル情報:');
+    console.log('- 名前:', fileName);
+    console.log('- MIMEタイプ:', mimeType);
+    console.log('- サイズ:', size, 'bytes');
+
+    // 共有設定変更
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    console.log('共有設定を変更しました');
+
+    // ダウンロードURL生成
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    console.log('生成したダウンロードURL:', downloadUrl);
+
+    // URLアクセステスト
+    console.log('URLアクセスチェック開始...');
+    const response = UrlFetchApp.fetch(downloadUrl, {
+      method: 'get',
+      headers: { 'Range': 'bytes=0-0' },
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+
+    const statusCode = response.getResponseCode();
+    console.log('HTTPステータスコード:', statusCode);
+
+    if (statusCode === 200 || statusCode === 206) {
+      console.log('✅ URLアクセス成功！');
+
+      let message = 'Google Driveファイルテスト結果:\n\n';
+      message += `ファイルID: ${fileId}\n`;
+      message += `ファイル名: ${fileName}\n`;
+      message += `MIMEタイプ: ${mimeType}\n`;
+      message += `サイズ: ${Math.round(size / 1024)} KB\n\n`;
+      message += `✅ 共有設定変更: 成功\n`;
+      message += `✅ URL生成: ${downloadUrl}\n`;
+      message += `✅ URLアクセス: HTTP ${statusCode} (成功)\n\n`;
+      message += 'このURLはInstagram APIで使用可能です！';
+
+      ui.alert('テスト成功', message, ui.ButtonSet.OK);
+
+    } else {
+      console.log('❌ URLアクセス失敗:', statusCode);
+      const errorText = response.getContentText();
+
+      let message = 'Google Driveファイルテスト結果:\n\n';
+      message += `ファイルID: ${fileId}\n`;
+      message += `ファイル名: ${fileName}\n\n`;
+      message += `❌ URLアクセス失敗: HTTP ${statusCode}\n`;
+      message += `エラー詳細: ${errorText.substring(0, 200)}\n\n`;
+      message += 'ファイルの共有設定を確認してください。';
+
+      ui.alert('テスト失敗', message, ui.ButtonSet.OK);
+    }
+
+  } catch (error) {
+    console.error('ファイルアクセスエラー:', error);
+
+    let message = 'Google Driveファイルテスト結果:\n\n';
+    message += `ファイルID: ${fileId}\n\n`;
+    message += `❌ ファイルアクセス失敗\n`;
+    message += `エラー: ${error.toString()}\n\n`;
+    message += 'ファイルIDが正しいか、アクセス権限があるかを確認してください。';
+
+    ui.alert('テストエラー', message, ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// Google Drive URL変換テスト
+// ===========================
+function testDriveUrlConversion(testUrl) {
+  const ui = SpreadsheetApp.getUi();
+
+  // パラメータが渡されなかった場合はプロンプトを表示
+  if (!testUrl) {
+    const response = ui.prompt(
+      'Google Drive URL変換テスト',
+      'テストするGoogle DriveのURLまたはファイルIDを入力してください:\n\n' +
+      '例: https://drive.google.com/file/d/1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe/view?usp=sharing\n' +
+      'またはファイルIDのみ: 1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe',
+      ui.ButtonSet.OK_CANCEL
+    );
+
+    if (response.getSelectedButton() !== ui.Button.OK) {
+      return;
+    }
+
+    testUrl = response.getResponseText().trim();
+  }
 
   if (!testUrl) {
     ui.alert('エラー', 'URLが入力されていません。', ui.ButtonSet.OK);
@@ -198,82 +322,6 @@ function testDriveUrlConversion() {
   }
 }
 
-// ===========================
-// プロキシ機能テスト
-// ===========================
-function testProxyFunction() {
-  const ui = SpreadsheetApp.getUi();
-
-  const response = ui.prompt(
-    'プロキシ機能テスト',
-    'テストするGoogle DriveのファイルIDを入力してください:\n\n' +
-    '例: 1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe\n\n' +
-    '※ ファイルIDはURLの /d/ と /view の間の部分です',
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
-  }
-
-  const fileId = response.getResponseText().trim();
-
-  if (!fileId) {
-    ui.alert('エラー', 'ファイルIDが入力されていません。', ui.ButtonSet.OK);
-    return;
-  }
-
-  try {
-    const webAppUrl = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
-
-    if (!webAppUrl) {
-      ui.alert('エラー', 'WebアプリURLが設定されていません。\n\n' +
-        'まず「WebアプリURL手動設定」を実行してください。', ui.ButtonSet.OK);
-      return;
-    }
-
-    const proxyUrl = `${webAppUrl}?id=${fileId}`;
-
-    console.log('=== プロキシテスト開始 ===');
-    console.log('ファイルID:', fileId);
-    console.log('プロキシURL:', proxyUrl);
-
-    // UrlFetchAppでテスト（ヘッダーのみ取得）
-    const response = UrlFetchApp.fetch(proxyUrl, {
-      method: 'get',
-      headers: { 'Range': 'bytes=0-0' },
-      muteHttpExceptions: true
-    });
-
-    const statusCode = response.getResponseCode();
-    const headers = response.getHeaders();
-
-    console.log('HTTPステータス:', statusCode);
-    console.log('レスポンスヘッダー:', headers);
-
-    let message = 'プロキシ機能テスト結果:\n\n';
-    message += `ファイルID: ${fileId}\n`;
-    message += `プロキシURL: ${proxyUrl}\n`;
-    message += `HTTPステータス: ${statusCode}\n\n`;
-
-    if (statusCode === 200) {
-      message += '✅ プロキシ機能が正常に動作しています！\n\n';
-      message += 'Content-Type: ' + (headers['Content-Type'] || headers['content-type'] || '不明') + '\n';
-      message += 'Content-Length: ' + (headers['Content-Length'] || headers['content-length'] || '不明') + '\n\n';
-      message += 'このURLをInstagram APIのimage_urlパラメータに使用できます。';
-    } else {
-      const errorText = response.getContentText();
-      message += '❌ プロキシ機能に問題があります。\n\n';
-      message += 'エラー詳細: ' + errorText;
-    }
-
-    ui.alert('プロキシ機能テスト', message, ui.ButtonSet.OK);
-
-  } catch (error) {
-    console.error('プロキシテストエラー:', error);
-    ui.alert('エラー', 'プロキシ機能テストに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
 
 // ===========================
 // 設定テスト関数
@@ -328,7 +376,12 @@ function testConfiguration() {
 function onOpen() {
   try {
     const ui = SpreadsheetApp.getUi();
-    
+
+    // 既存のメニューをクリア（念のため）
+    try { ui.removeMenu('🔒 管理者用'); } catch (e) {}
+    try { ui.removeMenu('Threads自動化'); } catch (e) {}
+    try { ui.removeMenu('アカウント情報'); } catch (e) {}
+
     // 管理者用メニュー
     ui.createMenu('🔒 管理者用')
       .addItem('基本設定を表示', 'showSettingsSheet')
@@ -337,56 +390,40 @@ function onOpen() {
       .addItem('現在のトリガーの所有者を確認', 'checkTriggerOwners')
       .addItem('API呼び出し回数確認', 'showUrlFetchCountWithAuth')
       .addToUi();
-    
+
     // Threads自動化メニュー
     ui.createMenu('Threads自動化')
-    .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
-    .addSeparator()
-    .addItem('⏰ トリガーを再設定', 'resetAutomationTriggers')
-    .addItem('🛑 すべてのトリガーを停止', 'disableAllAutomationTriggers')
-    .addSeparator()
-    .addItem('📤 手動投稿実行', 'manualPostExecution')
-    .addItem('🧵 最新投稿50件を取得', 'fetchLatestThreadsPosts')
-    .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
-    .addItem('🔄 自動返信のみ', 'manualAutoReply')
-    .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
-    .addSeparator()
-    .addItem('🧪 自動返信テスト', 'simulateAutoReply')
-    .addItem('🧪 設定テスト', 'testConfiguration')
-    .addSeparator()
-    .addItem('🔗 Google Drive URL変換テスト', 'testDriveUrlConversion')
-    .addItem('🌐 プロキシ機能テスト', 'testProxyFunction')
-    .addSeparator()
-    .addItem('⚙️ WebアプリURL手動設定', 'setWebAppUrlManually')
-    .addItem('🔍 WebアプリURL確認', 'checkWebAppUrl')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('📁 シート再構成')
-      .addItem('💬 受信したリプライシート再構成（非破壊）', 'resetRepliesSheet')
-      .addItem('🔍 キーワード設定シート再構成', 'resetAutoReplyKeywordsSheet')
-      .addItem('📅 予約投稿シート再構成', 'resetScheduledPostsSheet')
-      .addItem('✅ 自動応答結果シート再構成', 'resetReplyHistorySheet')
-      .addItem('⚙️ 基本設定シート再構成', 'resetSettingsSheet')
-      .addItem('📝 ログシート再構成', 'resetLogsSheet')
+      .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
+      .addItem('🔄 メニュー再読み込み', 'refreshMenu')
       .addSeparator()
-      .addItem('🔄 すべてのシートを再構成', 'resetAllSheets'))
-    .addSeparator()
-    .addItem('🗑️ ログクリア', 'clearLogs')
-    .addSeparator()
-    .addSubMenu(ui.createMenu('🔧 予約投稿デバッグ')
-      .addItem('🔍 トリガー状態確認', 'checkScheduledPostTriggers')
-      .addItem('📋 データ確認', 'checkScheduledPostsData')
-      .addItem('🐛 予約投稿デバッグ実行', 'debugScheduledPosts')
-      .addItem('💪 強制実行（過去含む）', 'forceProcessScheduledPosts'))
-    .addToUi();
-  
+      .addItem('🔗 Google Driveテスト', 'testDriveUrlWithFileId')
+      .addItem('📤 手動投稿実行', 'manualPostExecution')
+      .addItem('🧪 設定テスト', 'testConfiguration')
+      .addSeparator()
+      .addSubMenu(ui.createMenu('📁 シート再構成')
+        .addItem('💬 リプライシート再構成', 'resetRepliesSheet')
+        .addItem('🔍 キーワード設定シート再構成', 'resetAutoReplyKeywordsSheet')
+        .addItem('📅 予約投稿シート再構成', 'resetScheduledPostsSheet')
+        .addItem('✅ 自動応答結果シート再構成', 'resetReplyHistorySheet')
+        .addItem('⚙️ 基本設定シート再構成', 'resetSettingsSheet')
+        .addItem('📝 ログシート再構成', 'resetLogsSheet')
+        .addSeparator()
+        .addItem('🔄 すべてのシートを再構成', 'resetAllSheets'))
+      .addSeparator()
+      .addItem('🗑️ ログクリア', 'clearLogs')
+      .addToUi();
+
     // 初回起動時の設定チェック
     checkInitialSetup();
-    
+
     // 既存シートのヘッダー行を固定
     freezeExistingSheetHeaders();
 
     // アカウント情報メニューを追加
     buildAccountInfoMenu_();
+
+    console.log('メニュー作成完了');
+
   } catch (error) {
     console.error('メニュー作成エラー:', error);
     // エラーが発生してもスプレッドシートは使えるようにする
