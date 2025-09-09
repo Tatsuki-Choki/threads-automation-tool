@@ -15,122 +15,6 @@ const REPLY_HISTORY_SHEET_NAME = '自動応答結果';
 const REPLIES_SHEET_NAME = '受信したリプライ';
 
 // ===========================
-// WebアプリURL設定（自動取得）
-// ===========================
-function setWebAppUrl() {
-  const ui = SpreadsheetApp.getUi();
-
-  try {
-    // 現在のデプロイメントを取得
-    const deployments = ScriptApp.getProjectDeployments();
-    if (deployments.length === 0) {
-      ui.alert('エラー', 'Webアプリのデプロイが見つかりません。Google Apps ScriptエディタでWebアプリをデプロイしてください。', ui.ButtonSet.OK);
-      return;
-    }
-
-    // 最新のWebアプリデプロイメントを探す
-    let webAppDeployment = null;
-    for (const deployment of deployments) {
-      const config = deployment.getDeploymentConfig();
-      if (config && config.type === ScriptApp.DeploymentConfigType.WEB_APP) {
-        webAppDeployment = deployment;
-        break;
-      }
-    }
-
-    if (!webAppDeployment) {
-      ui.alert('エラー', 'Webアプリのデプロイが見つかりません。Google Apps ScriptエディタでWebアプリをデプロイしてください。', ui.ButtonSet.OK);
-      return;
-    }
-
-    // WebアプリURLを生成
-    const deploymentId = webAppDeployment.getDeploymentId();
-    const webAppUrl = `https://script.google.com/macros/s/${deploymentId}/exec`;
-
-    // スクリプトプロパティに保存
-    PropertiesService.getScriptProperties().setProperty('WEB_APP_URL', webAppUrl);
-
-    ui.alert('成功', `WebアプリURLを設定しました:\n\n${webAppUrl}`, ui.ButtonSet.OK);
-
-    console.log('WebアプリURL設定完了:', webAppUrl);
-
-  } catch (error) {
-    console.error('WebアプリURL設定エラー:', error);
-    ui.alert('エラー', 'WebアプリURLの設定に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-// ===========================
-// WebアプリURL手動設定
-// ===========================
-function setWebAppUrlManually() {
-  const ui = SpreadsheetApp.getUi();
-
-  const response = ui.prompt(
-    'WebアプリURL設定',
-    'Google Apps Scriptエディタで取得したWebアプリURLを入力してください:\n\n' +
-    '例: https://script.google.com/macros/s/AKfycbwvhpS1hrnkJXA9aTYx3W3mNbwTiYHIqelGH94xnIK8/exec',
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    return;
-  }
-
-  const webAppUrl = response.getResponseText().trim();
-
-  if (!webAppUrl) {
-    ui.alert('エラー', 'URLが入力されていません。', ui.ButtonSet.OK);
-    return;
-  }
-
-  // URLの形式チェック
-  if (!webAppUrl.startsWith('https://script.google.com/macros/s/')) {
-    ui.alert('エラー', '正しいWebアプリURLではありません。', ui.ButtonSet.OK);
-    return;
-  }
-
-  try {
-    // スクリプトプロパティに保存
-    PropertiesService.getScriptProperties().setProperty('WEB_APP_URL', webAppUrl);
-
-    ui.alert('成功', `WebアプリURLを設定しました:\n\n${webAppUrl}`, ui.ButtonSet.OK);
-    console.log('WebアプリURL手動設定完了:', webAppUrl);
-
-  } catch (error) {
-    console.error('WebアプリURL設定エラー:', error);
-    ui.alert('エラー', 'WebアプリURLの設定に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-// ===========================
-// 現在のWebアプリURL確認
-// ===========================
-function checkWebAppUrl() {
-  const ui = SpreadsheetApp.getUi();
-
-  try {
-    const webAppUrl = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
-
-    if (webAppUrl) {
-      ui.alert('WebアプリURL', `現在の設定:\n\n${webAppUrl}`, ui.ButtonSet.OK);
-    } else {
-      ui.alert('WebアプリURL未設定', 'WebアプリURLが設定されていません。\n\n' +
-        '1. Google Apps Scriptエディタを開く\n' +
-        '2. 「デプロイ」→「新しいデプロイ」\n' +
-        '3. 種類: 「ウェブアプリ」\n' +
-        '4. アクセス権: 「全員」\n' +
-        '5. デプロイスクリプトを実行\n\n' +
-        'その後、「WebアプリURL手動設定」を実行してください。', ui.ButtonSet.OK);
-    }
-
-  } catch (error) {
-    console.error('WebアプリURL確認エラー:', error);
-    ui.alert('エラー', 'WebアプリURLの確認に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-// ===========================
 // メニューを再読み込み
 // ===========================
 // （廃止）refreshMenu は削除しました
@@ -141,187 +25,6 @@ function checkWebAppUrl() {
 function testFunction() {
   SpreadsheetApp.getUi().alert('テスト', 'スクリプトは正常に動作しています。', SpreadsheetApp.getUi().ButtonSet.OK);
 }
-
-// ===========================
-// メニュー再読み込み
-// ===========================
-function refreshMenu() {
-  const ui = SpreadsheetApp.getUi();
-
-  try {
-    // 既存のメニューをクリア（Google Apps Scriptでは直接削除できないので注意）
-    // 代わりにonOpen関数を再実行してメニューを再構築
-
-    // まず現在のメニューをクリア
-    try {
-      ui.removeMenu('🔒 管理者用');
-    } catch (e) {}
-    try {
-      ui.removeMenu('Threads自動化');
-    } catch (e) {}
-    try {
-      ui.removeMenu('アカウント情報');
-    } catch (e) {}
-
-    // onOpen関数を再実行してメニューを再構築
-    onOpen();
-
-    ui.alert('メニュー更新完了', 'メニューを更新しました。', ui.ButtonSet.OK);
-
-  } catch (error) {
-    console.error('メニュー再読み込みエラー:', error);
-    ui.alert('エラー', 'メニュー再読み込みに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
-// ===========================
-// Google Drive ファイルID直接テスト
-// ===========================
-function testDriveUrlWithFileId(fileId) {
-  const ui = SpreadsheetApp.getUi();
-
-  // ファイルIDが指定されていない場合はユーザーのものを使用
-  if (!fileId) {
-    fileId = '1iXaD49YSZePJqRhN1_cKfmW4dNAZYQzWEOEItp2Zvl6SWOF9QMMvSJhV';
-  }
-
-  console.log('=== Google DriveファイルIDテスト開始 ===');
-  console.log('テスト対象ファイルID:', fileId);
-
-  try {
-    // ファイルアクセステスト
-    const file = DriveApp.getFileById(fileId);
-    const fileName = file.getName();
-    const mimeType = file.getMimeType();
-    const size = file.getSize();
-
-    console.log('ファイル情報:');
-    console.log('- 名前:', fileName);
-    console.log('- MIMEタイプ:', mimeType);
-    console.log('- サイズ:', size, 'bytes');
-
-    // 共有設定変更
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    console.log('共有設定を変更しました');
-
-    // ダウンロードURL生成
-    const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-    console.log('生成したダウンロードURL:', downloadUrl);
-
-    // URLアクセステスト
-    console.log('URLアクセスチェック開始...');
-    const response = UrlFetchApp.fetch(downloadUrl, {
-      method: 'get',
-      headers: { 'Range': 'bytes=0-0' },
-      muteHttpExceptions: true,
-      followRedirects: true
-    });
-
-    const statusCode = response.getResponseCode();
-    console.log('HTTPステータスコード:', statusCode);
-
-    if (statusCode === 200 || statusCode === 206) {
-      console.log('✅ URLアクセス成功！');
-
-      let message = 'Google Driveファイルテスト結果:\n\n';
-      message += `ファイルID: ${fileId}\n`;
-      message += `ファイル名: ${fileName}\n`;
-      message += `MIMEタイプ: ${mimeType}\n`;
-      message += `サイズ: ${Math.round(size / 1024)} KB\n\n`;
-      message += `✅ 共有設定変更: 成功\n`;
-      message += `✅ URL生成: ${downloadUrl}\n`;
-      message += `✅ URLアクセス: HTTP ${statusCode} (成功)\n\n`;
-      message += 'このURLはInstagram APIで使用可能です！';
-
-      ui.alert('テスト成功', message, ui.ButtonSet.OK);
-
-    } else {
-      console.log('❌ URLアクセス失敗:', statusCode);
-      const errorText = response.getContentText();
-
-      let message = 'Google Driveファイルテスト結果:\n\n';
-      message += `ファイルID: ${fileId}\n`;
-      message += `ファイル名: ${fileName}\n\n`;
-      message += `❌ URLアクセス失敗: HTTP ${statusCode}\n`;
-      message += `エラー詳細: ${errorText.substring(0, 200)}\n\n`;
-      message += 'ファイルの共有設定を確認してください。';
-
-      ui.alert('テスト失敗', message, ui.ButtonSet.OK);
-    }
-
-  } catch (error) {
-    console.error('ファイルアクセスエラー:', error);
-
-    let message = 'Google Driveファイルテスト結果:\n\n';
-    message += `ファイルID: ${fileId}\n\n`;
-    message += `❌ ファイルアクセス失敗\n`;
-    message += `エラー: ${error.toString()}\n\n`;
-    message += 'ファイルIDが正しいか、アクセス権限があるかを確認してください。';
-
-    ui.alert('テストエラー', message, ui.ButtonSet.OK);
-  }
-}
-
-// ===========================
-// Google Drive URL変換テスト
-// ===========================
-function testDriveUrlConversion(testUrl) {
-  const ui = SpreadsheetApp.getUi();
-
-  // パラメータが渡されなかった場合はプロンプトを表示
-  if (!testUrl) {
-    const response = ui.prompt(
-      'Google Drive URL変換テスト',
-      'テストするGoogle DriveのURLまたはファイルIDを入力してください:\n\n' +
-      '例: https://drive.google.com/file/d/1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe/view?usp=sharing\n' +
-      'またはファイルIDのみ: 1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe',
-      ui.ButtonSet.OK_CANCEL
-    );
-
-    if (response.getSelectedButton() !== ui.Button.OK) {
-      return;
-    }
-
-    testUrl = response.getResponseText().trim();
-  }
-
-  if (!testUrl) {
-    ui.alert('エラー', 'URLが入力されていません。', ui.ButtonSet.OK);
-    return;
-  }
-
-  try {
-    console.log('=== URL変換テスト開始 ===');
-    console.log('入力URL:', testUrl);
-
-    // convertToPublicUrl関数を呼び出し
-    const convertedUrl = convertToPublicUrl(testUrl);
-
-    console.log('変換後URL:', convertedUrl);
-
-    let message = 'URL変換テスト結果:\n\n';
-    message += `入力: ${testUrl}\n\n`;
-    message += `出力: ${convertedUrl}\n\n`;
-
-    if (convertedUrl !== testUrl) {
-      message += '✅ Google Drive URLが検出され、プロキシURLに変換されました。\n\n';
-      message += 'このURLをInstagram APIに渡すことで、Google Driveの画像が正しく読み込まれるはずです。';
-    } else {
-      message += '⚠️ Google Drive URLが検出されませんでした。\n\n';
-      message += 'URLの形式を確認してください。対応形式:\n';
-      message += '- https://drive.google.com/file/d/FILE_ID/view\n';
-      message += '- https://drive.google.com/open?id=FILE_ID\n';
-      message += '- https://drive.google.com/uc?export=download&id=FILE_ID';
-    }
-
-    ui.alert('URL変換テスト', message, ui.ButtonSet.OK);
-
-  } catch (error) {
-    console.error('URL変換テストエラー:', error);
-    ui.alert('エラー', 'URL変換テストに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
-  }
-}
-
 
 // ===========================
 // 設定テスト関数
@@ -376,12 +79,7 @@ function testConfiguration() {
 function onOpen() {
   try {
     const ui = SpreadsheetApp.getUi();
-
-    // 既存のメニューをクリア（念のため）
-    try { ui.removeMenu('🔒 管理者用'); } catch (e) {}
-    try { ui.removeMenu('Threads自動化'); } catch (e) {}
-    try { ui.removeMenu('アカウント情報'); } catch (e) {}
-
+    
     // 管理者用メニュー
     ui.createMenu('🔒 管理者用')
       .addItem('基本設定を表示', 'showSettingsSheet')
@@ -390,40 +88,50 @@ function onOpen() {
       .addItem('現在のトリガーの所有者を確認', 'checkTriggerOwners')
       .addItem('API呼び出し回数確認', 'showUrlFetchCountWithAuth')
       .addToUi();
-
+    
     // Threads自動化メニュー
     ui.createMenu('Threads自動化')
-      .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
-      .addItem('🔄 メニュー再読み込み', 'refreshMenu')
+    .addItem('🚀 クイックセットアップ', 'quickSetupWithExistingToken')
+    .addSeparator()
+    .addItem('⏰ トリガーを再設定', 'resetAutomationTriggers')
+    .addItem('🛑 すべてのトリガーを停止', 'disableAllAutomationTriggers')
+    .addSeparator()
+    .addItem('📤 手動投稿実行', 'manualPostExecution')
+    .addItem('🧵 最新投稿50件を取得', 'fetchLatestThreadsPosts')
+    .addItem('💬 リプライ＋自動返信（統合実行）', 'fetchAndAutoReply')
+    .addItem('🔄 自動返信のみ', 'manualAutoReply')
+    .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
+    .addSeparator()
+    .addItem('🧪 自動返信テスト', 'simulateAutoReply')
+    .addItem('🧪 設定テスト', 'testConfiguration')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('📁 シート再構成')
+      .addItem('💬 受信したリプライシート再構成（非破壊）', 'resetRepliesSheet')
+      .addItem('🔍 キーワード設定シート再構成', 'resetAutoReplyKeywordsSheet')
+      .addItem('📅 予約投稿シート再構成', 'resetScheduledPostsSheet')
+      .addItem('✅ 自動応答結果シート再構成', 'resetReplyHistorySheet')
+      .addItem('⚙️ 基本設定シート再構成', 'resetSettingsSheet')
+      .addItem('📝 ログシート再構成', 'resetLogsSheet')
       .addSeparator()
-      .addItem('🔗 Google Driveテスト', 'testDriveUrlWithFileId')
-      .addItem('📤 手動投稿実行', 'manualPostExecution')
-      .addItem('🧪 設定テスト', 'testConfiguration')
-      .addSeparator()
-      .addSubMenu(ui.createMenu('📁 シート再構成')
-        .addItem('💬 リプライシート再構成', 'resetRepliesSheet')
-        .addItem('🔍 キーワード設定シート再構成', 'resetAutoReplyKeywordsSheet')
-        .addItem('📅 予約投稿シート再構成', 'resetScheduledPostsSheet')
-        .addItem('✅ 自動応答結果シート再構成', 'resetReplyHistorySheet')
-        .addItem('⚙️ 基本設定シート再構成', 'resetSettingsSheet')
-        .addItem('📝 ログシート再構成', 'resetLogsSheet')
-        .addSeparator()
-        .addItem('🔄 すべてのシートを再構成', 'resetAllSheets'))
-      .addSeparator()
-      .addItem('🗑️ ログクリア', 'clearLogs')
-      .addToUi();
-
-    // 初回起動時の設定チェック
-    checkInitialSetup();
-
+      .addItem('🔄 すべてのシートを再構成', 'resetAllSheets'))
+    .addSeparator()
+    .addItem('🗑️ ログクリア', 'clearLogs')
+    .addSeparator()
+    .addSubMenu(ui.createMenu('🔧 予約投稿デバッグ')
+      .addItem('🔍 トリガー状態確認', 'checkScheduledPostTriggers')
+      .addItem('📋 データ確認', 'checkScheduledPostsData')
+      .addItem('🐛 予約投稿デバッグ実行', 'debugScheduledPosts')
+      .addItem('💪 強制実行（過去含む）', 'forceProcessScheduledPosts'))
+    .addToUi();
+  
+    // 初回起動時の設定チェック（無効化）
+    // checkInitialSetup();
+    
     // 既存シートのヘッダー行を固定
     freezeExistingSheetHeaders();
 
     // アカウント情報メニューを追加
     buildAccountInfoMenu_();
-
-    console.log('メニュー作成完了');
-
   } catch (error) {
     console.error('メニュー作成エラー:', error);
     // エラーが発生してもスプレッドシートは使えるようにする

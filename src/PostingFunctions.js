@@ -1218,76 +1218,36 @@ function postReplyWithMultipleImages(text, imageUrls, replyToId) {
 }
 
 // ===========================
-// URL変換（Google Drive共有対応）
+// URL変換
 // ===========================
 function convertToPublicUrl(url) {
-  if (!url) return url;
-
   // Google DriveのURLパターンをチェック
   const drivePatterns = [
     /drive\.google\.com\/file\/d\/([a-zA-Z0-9-_]+)/,
     /drive\.google\.com\/open\?id=([a-zA-Z0-9-_]+)/,
-    /docs\.google\.com\/.*\/d\/([a-zA-Z0-9-_]+)/,
-    /drive\.google\.com\/uc\?.*?[?&]id=([a-zA-Z0-9-_]+)/
+    /docs\.google\.com\/.*\/d\/([a-zA-Z0-9-_]+)/
   ];
-
+  
   for (const pattern of drivePatterns) {
     const match = url.match(pattern);
     if (match) {
       const fileId = match[1];
-      console.log('Google Driveリンクを検出:', fileId);
-
+      
       try {
-        // ファイルの共有設定を変更（リンクを知っている全員が閲覧可能に）
+        // ファイルの共有設定を変更
         const file = DriveApp.getFileById(fileId);
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-        // ファイルのMIMEタイプを確認
-        const mimeType = file.getMimeType();
-        console.log('ファイルMIMEタイプ:', mimeType);
-
-        // 画像ファイルの場合のみ変換
-        if (mimeType && mimeType.startsWith('image/')) {
-          // より確実なダウンロードURLを生成
-          const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
-          console.log('変換後URL:', downloadUrl);
-
-          // URLが有効か簡易チェック
-          try {
-            const testResponse = UrlFetchApp.fetch(downloadUrl, {
-              method: 'get',
-              headers: { 'Range': 'bytes=0-0' },
-              muteHttpExceptions: true,
-              followRedirects: true
-            });
-
-            const statusCode = testResponse.getResponseCode();
-            console.log('URLアクセスチェック結果:', statusCode);
-
-            if (statusCode === 200 || statusCode === 206) {
-              return downloadUrl;
-            } else {
-              console.warn('URLアクセスに失敗、元のURLを使用:', statusCode);
-              return url;
-            }
-          } catch (testError) {
-            console.warn('URLテストエラー、元のURLを使用:', testError.toString());
-            return url;
-          }
-        } else {
-          console.log('画像ファイルではないため変換せず:', mimeType);
-          return url;
-        }
-
+        
+        // 直接ダウンロードURLを返す
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
       } catch (error) {
-        console.error('convertToPublicUrlエラー:', error);
         logError('convertToPublicUrl', error);
         // エラーの場合は元のURLを返す
         return url;
       }
     }
   }
-
+  
   // Google Drive以外のURLはそのまま返す
   return url;
 }
