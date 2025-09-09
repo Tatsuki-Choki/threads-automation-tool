@@ -47,11 +47,7 @@ function quickSetupWithExistingToken() {
       }
     }
     
-    // 3. トークンの有効期限同期（公式debug_tokenから取得）
-    const synced = updateTokenExpiryFromDebugToken_();
-    if (!synced) {
-      ui.alert('注意', '公式のトークン有効期限を取得できませんでした。CLIENT_ID/CLIENT_SECRETの設定とトークンの有効性をご確認ください。', ui.ButtonSet.OK);
-    }
+    // 3. （廃止）トークン有効期限同期は行いません
     
     // 4. スクリプトIDを基本設定に追加
     const scriptId = ScriptApp.getScriptId();
@@ -176,7 +172,7 @@ function setupDefaultTriggers() {
     // デフォルト値
     const postInterval = 5;    // 5分
     const replyInterval = 30;  // 30分
-    const tokenHour = 3;       // 午前3時
+    // tokenHour 廃止
     
     // 予約投稿用トリガー（5分ごと）
     ScriptApp.newTrigger('processScheduledPosts')

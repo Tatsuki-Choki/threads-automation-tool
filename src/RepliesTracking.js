@@ -355,6 +355,19 @@ function saveReplyToSheet(reply, originalPost, sheet) {
   range.setBackground(null);
   range.setFontColor('#000000');
   
+  // 最新100件のみ表示（ヘッダーを除くデータ行を100件に制限）
+  try {
+    const maxDataRows = 100;
+    const totalDataRows = sheet.getLastRow() - 1; // ヘッダー除く
+    if (totalDataRows > maxDataRows) {
+      const rowsToDelete = totalDataRows - maxDataRows;
+      // 古い行（ヘッダー直下）から削除
+      sheet.deleteRows(2, rowsToDelete);
+    }
+  } catch (e) {
+    console.warn('受信したリプライのトリミング中に警告:', e);
+  }
+  
   return 'new';
 }
 

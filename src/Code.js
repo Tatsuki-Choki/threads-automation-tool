@@ -15,18 +15,264 @@ const REPLY_HISTORY_SHEET_NAME = '自動応答結果';
 const REPLIES_SHEET_NAME = '受信したリプライ';
 
 // ===========================
+// WebアプリURL設定（自動取得）
+// ===========================
+function setWebAppUrl() {
+  const ui = SpreadsheetApp.getUi();
+
+  try {
+    // 現在のデプロイメントを取得
+    const deployments = ScriptApp.getProjectDeployments();
+    if (deployments.length === 0) {
+      ui.alert('エラー', 'Webアプリのデプロイが見つかりません。Google Apps ScriptエディタでWebアプリをデプロイしてください。', ui.ButtonSet.OK);
+      return;
+    }
+
+    // 最新のWebアプリデプロイメントを探す
+    let webAppDeployment = null;
+    for (const deployment of deployments) {
+      const config = deployment.getDeploymentConfig();
+      if (config && config.type === ScriptApp.DeploymentConfigType.WEB_APP) {
+        webAppDeployment = deployment;
+        break;
+      }
+    }
+
+    if (!webAppDeployment) {
+      ui.alert('エラー', 'Webアプリのデプロイが見つかりません。Google Apps ScriptエディタでWebアプリをデプロイしてください。', ui.ButtonSet.OK);
+      return;
+    }
+
+    // WebアプリURLを生成
+    const deploymentId = webAppDeployment.getDeploymentId();
+    const webAppUrl = `https://script.google.com/macros/s/${deploymentId}/exec`;
+
+    // スクリプトプロパティに保存
+    PropertiesService.getScriptProperties().setProperty('WEB_APP_URL', webAppUrl);
+
+    ui.alert('成功', `WebアプリURLを設定しました:\n\n${webAppUrl}`, ui.ButtonSet.OK);
+
+    console.log('WebアプリURL設定完了:', webAppUrl);
+
+  } catch (error) {
+    console.error('WebアプリURL設定エラー:', error);
+    ui.alert('エラー', 'WebアプリURLの設定に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// WebアプリURL手動設定
+// ===========================
+function setWebAppUrlManually() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.prompt(
+    'WebアプリURL設定',
+    'Google Apps Scriptエディタで取得したWebアプリURLを入力してください:\n\n' +
+    '例: https://script.google.com/macros/s/AKfycbwvhpS1hrnkJXA9aTYx3W3mNbwTiYHIqelGH94xnIK8/exec',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const webAppUrl = response.getResponseText().trim();
+
+  if (!webAppUrl) {
+    ui.alert('エラー', 'URLが入力されていません。', ui.ButtonSet.OK);
+    return;
+  }
+
+  // URLの形式チェック
+  if (!webAppUrl.startsWith('https://script.google.com/macros/s/')) {
+    ui.alert('エラー', '正しいWebアプリURLではありません。', ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    // スクリプトプロパティに保存
+    PropertiesService.getScriptProperties().setProperty('WEB_APP_URL', webAppUrl);
+
+    ui.alert('成功', `WebアプリURLを設定しました:\n\n${webAppUrl}`, ui.ButtonSet.OK);
+    console.log('WebアプリURL手動設定完了:', webAppUrl);
+
+  } catch (error) {
+    console.error('WebアプリURL設定エラー:', error);
+    ui.alert('エラー', 'WebアプリURLの設定に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// 現在のWebアプリURL確認
+// ===========================
+function checkWebAppUrl() {
+  const ui = SpreadsheetApp.getUi();
+
+  try {
+    const webAppUrl = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
+
+    if (webAppUrl) {
+      ui.alert('WebアプリURL', `現在の設定:\n\n${webAppUrl}`, ui.ButtonSet.OK);
+    } else {
+      ui.alert('WebアプリURL未設定', 'WebアプリURLが設定されていません。\n\n' +
+        '1. Google Apps Scriptエディタを開く\n' +
+        '2. 「デプロイ」→「新しいデプロイ」\n' +
+        '3. 種類: 「ウェブアプリ」\n' +
+        '4. アクセス権: 「全員」\n' +
+        '5. デプロイスクリプトを実行\n\n' +
+        'その後、「WebアプリURL手動設定」を実行してください。', ui.ButtonSet.OK);
+    }
+
+  } catch (error) {
+    console.error('WebアプリURL確認エラー:', error);
+    ui.alert('エラー', 'WebアプリURLの確認に失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
 // メニューを再読み込み
 // ===========================
-function refreshMenu() {
-  onOpen();
-  SpreadsheetApp.getUi().alert('メニューを再読み込みしました', 'Threads自動化メニューが表示されているか確認してください。', SpreadsheetApp.getUi().ButtonSet.OK);
-}
+// （廃止）refreshMenu は削除しました
 
 // ===========================
 // テスト関数（動作確認用）
 // ===========================
 function testFunction() {
   SpreadsheetApp.getUi().alert('テスト', 'スクリプトは正常に動作しています。', SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+// ===========================
+// Google Drive URL変換テスト
+// ===========================
+function testDriveUrlConversion() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.prompt(
+    'Google Drive URL変換テスト',
+    'テストするGoogle DriveのURLを入力してください:\n\n' +
+    '例: https://drive.google.com/file/d/1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe/view?usp=sharing',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const testUrl = response.getResponseText().trim();
+
+  if (!testUrl) {
+    ui.alert('エラー', 'URLが入力されていません。', ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    console.log('=== URL変換テスト開始 ===');
+    console.log('入力URL:', testUrl);
+
+    // convertToPublicUrl関数を呼び出し
+    const convertedUrl = convertToPublicUrl(testUrl);
+
+    console.log('変換後URL:', convertedUrl);
+
+    let message = 'URL変換テスト結果:\n\n';
+    message += `入力: ${testUrl}\n\n`;
+    message += `出力: ${convertedUrl}\n\n`;
+
+    if (convertedUrl !== testUrl) {
+      message += '✅ Google Drive URLが検出され、プロキシURLに変換されました。\n\n';
+      message += 'このURLをInstagram APIに渡すことで、Google Driveの画像が正しく読み込まれるはずです。';
+    } else {
+      message += '⚠️ Google Drive URLが検出されませんでした。\n\n';
+      message += 'URLの形式を確認してください。対応形式:\n';
+      message += '- https://drive.google.com/file/d/FILE_ID/view\n';
+      message += '- https://drive.google.com/open?id=FILE_ID\n';
+      message += '- https://drive.google.com/uc?export=download&id=FILE_ID';
+    }
+
+    ui.alert('URL変換テスト', message, ui.ButtonSet.OK);
+
+  } catch (error) {
+    console.error('URL変換テストエラー:', error);
+    ui.alert('エラー', 'URL変換テストに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
+}
+
+// ===========================
+// プロキシ機能テスト
+// ===========================
+function testProxyFunction() {
+  const ui = SpreadsheetApp.getUi();
+
+  const response = ui.prompt(
+    'プロキシ機能テスト',
+    'テストするGoogle DriveのファイルIDを入力してください:\n\n' +
+    '例: 1K9sKJMGyxrgbYgdW6fxYuWXKh0U7FDMe\n\n' +
+    '※ ファイルIDはURLの /d/ と /view の間の部分です',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    return;
+  }
+
+  const fileId = response.getResponseText().trim();
+
+  if (!fileId) {
+    ui.alert('エラー', 'ファイルIDが入力されていません。', ui.ButtonSet.OK);
+    return;
+  }
+
+  try {
+    const webAppUrl = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
+
+    if (!webAppUrl) {
+      ui.alert('エラー', 'WebアプリURLが設定されていません。\n\n' +
+        'まず「WebアプリURL手動設定」を実行してください。', ui.ButtonSet.OK);
+      return;
+    }
+
+    const proxyUrl = `${webAppUrl}?id=${fileId}`;
+
+    console.log('=== プロキシテスト開始 ===');
+    console.log('ファイルID:', fileId);
+    console.log('プロキシURL:', proxyUrl);
+
+    // UrlFetchAppでテスト（ヘッダーのみ取得）
+    const response = UrlFetchApp.fetch(proxyUrl, {
+      method: 'get',
+      headers: { 'Range': 'bytes=0-0' },
+      muteHttpExceptions: true
+    });
+
+    const statusCode = response.getResponseCode();
+    const headers = response.getHeaders();
+
+    console.log('HTTPステータス:', statusCode);
+    console.log('レスポンスヘッダー:', headers);
+
+    let message = 'プロキシ機能テスト結果:\n\n';
+    message += `ファイルID: ${fileId}\n`;
+    message += `プロキシURL: ${proxyUrl}\n`;
+    message += `HTTPステータス: ${statusCode}\n\n`;
+
+    if (statusCode === 200) {
+      message += '✅ プロキシ機能が正常に動作しています！\n\n';
+      message += 'Content-Type: ' + (headers['Content-Type'] || headers['content-type'] || '不明') + '\n';
+      message += 'Content-Length: ' + (headers['Content-Length'] || headers['content-length'] || '不明') + '\n\n';
+      message += 'このURLをInstagram APIのimage_urlパラメータに使用できます。';
+    } else {
+      const errorText = response.getContentText();
+      message += '❌ プロキシ機能に問題があります。\n\n';
+      message += 'エラー詳細: ' + errorText;
+    }
+
+    ui.alert('プロキシ機能テスト', message, ui.ButtonSet.OK);
+
+  } catch (error) {
+    console.error('プロキシテストエラー:', error);
+    ui.alert('エラー', 'プロキシ機能テストに失敗しました: ' + error.toString(), ui.ButtonSet.OK);
+  }
 }
 
 // ===========================
@@ -105,15 +351,17 @@ function onOpen() {
     .addItem('🔄 自動返信のみ', 'manualAutoReply')
     .addItem('⏪ 過去6時間を再処理', 'manualBackfill6Hours')
     .addSeparator()
-    .addItem('⏸ 自動処理を一時停止', 'pauseAllAutomation')
-    .addItem('▶ 自動処理を再開', 'resumeAllAutomation')
-    .addItem('🛑 全機能停止（即時）', 'stopAllAutomationNow')
-    .addSeparator()
     .addItem('🧪 自動返信テスト', 'simulateAutoReply')
     .addItem('🧪 設定テスト', 'testConfiguration')
     .addSeparator()
+    .addItem('🔗 Google Drive URL変換テスト', 'testDriveUrlConversion')
+    .addItem('🌐 プロキシ機能テスト', 'testProxyFunction')
+    .addSeparator()
+    .addItem('⚙️ WebアプリURL手動設定', 'setWebAppUrlManually')
+    .addItem('🔍 WebアプリURL確認', 'checkWebAppUrl')
+    .addSeparator()
     .addSubMenu(ui.createMenu('📁 シート再構成')
-      .addItem('💬 受信したリプライシート初期化', 'initializeRepliesSheet')
+      .addItem('💬 受信したリプライシート再構成（非破壊）', 'resetRepliesSheet')
       .addItem('🔍 キーワード設定シート再構成', 'resetAutoReplyKeywordsSheet')
       .addItem('📅 予約投稿シート再構成', 'resetScheduledPostsSheet')
       .addItem('✅ 自動応答結果シート再構成', 'resetReplyHistorySheet')
@@ -168,34 +416,8 @@ function formatDateForDisplay_(date) {
  */
 function getAccountStatus_() {
   const username = getConfig('USERNAME');
-  const expiresStr = getConfig('TOKEN_EXPIRES');
-
-  let expiresAt = null;
-  let expiryDisplay = '';
-  let remainingDays = null;
-  let status = 'not_set'; // not_set | invalid | expired | warning | ok
-
-  if (expiresStr) {
-    const parsed = new Date(expiresStr);
-    if (!isNaN(parsed.getTime())) {
-      expiresAt = parsed;
-      const now = new Date();
-      const diffMs = expiresAt.getTime() - now.getTime();
-      remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      if (diffMs <= 0) {
-        status = 'expired';
-      } else if (remainingDays <= 7) {
-        status = 'warning';
-      } else {
-        status = 'ok';
-      }
-      expiryDisplay = formatDateForDisplay_(expiresAt);
-    } else {
-      status = 'invalid';
-    }
-  }
-
-  return { username, expiresAt, expiryDisplay, remainingDays, status };
+  const status = username ? 'ok' : 'not_set';
+  return { username, status };
 }
 
 /**
@@ -205,27 +427,10 @@ function buildAccountInfoMenu_() {
   try {
     const ui = SpreadsheetApp.getUi();
     const s = getAccountStatus_();
-
     const accountLabel = `アカウント: ${s.username ? '@' + s.username : '未設定'}`;
-
-    let tokenLabel = 'トークン: 未設定';
-    if (s.status === 'invalid') {
-      tokenLabel = 'トークン: 不正な有効期限';
-    } else if (s.status === 'expired') {
-      tokenLabel = 'トークン: ⛔ 失効（要更新）';
-    } else if (s.status === 'warning') {
-      tokenLabel = `トークン: ${s.expiryDisplay}（⚠︎ 残 ${s.remainingDays} 日）`;
-    } else if (s.status === 'ok') {
-      tokenLabel = `トークン: ${s.expiryDisplay}（残 ${s.remainingDays} 日）`;
-    }
 
     ui.createMenu('アカウント情報')
       .addItem(accountLabel, 'showAccountStatus')
-      .addItem(tokenLabel, 'showAccountStatus')
-      .addSeparator()
-      .addItem('詳細を表示…', 'showAccountDetails')
-      .addItem('🔑 再認証（長期トークン更新）', 'openTokenRenewal')
-      .addItem('状態を再取得', 'refreshMenu')
       .addToUi();
   } catch (e) {
     console.error('アカウント情報メニュー作成エラー:', e);
@@ -241,18 +446,6 @@ function showAccountStatus() {
     const s = getAccountStatus_();
     let msg = `アカウント: ${s.username ? '@' + s.username : '未設定'}\n`;
 
-    if (s.status === 'not_set') {
-      msg += 'トークン: 未設定\n';
-    } else if (s.status === 'invalid') {
-      msg += 'トークン: 不正なトークン情報（要確認）\n';
-    } else if (s.status === 'expired') {
-      msg += 'トークン: ⛔ 失効（要更新）\n';
-    } else if (s.status === 'warning') {
-      msg += `トークン: ${s.expiryDisplay}（⚠︎ 残 ${s.remainingDays} 日）\n`;
-    } else {
-      msg += `トークン: ${s.expiryDisplay}（残 ${s.remainingDays} 日）\n`;
-    }
-
     ui.alert('アカウント情報', msg, ui.ButtonSet.OK);
     logOperation('アカウント情報表示', 'info', msg);
   } catch (error) {
@@ -264,64 +457,14 @@ function showAccountStatus() {
 /**
  * 詳細の表示（モーダル）
  */
-function showAccountDetails() {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    const s = getAccountStatus_();
-    const tz = Session.getScriptTimeZone() || 'Asia/Tokyo';
-    const now = new Date();
-    const nowDisp = formatDateForDisplay_(now);
-
-    let lines = [];
-    lines.push(`アカウント: ${s.username ? '@' + s.username : '未設定'}`);
-    if (s.status === 'not_set') {
-      lines.push('有効期限: 未設定');
-    } else if (s.status === 'invalid') {
-      lines.push('有効期限: 不正な値（要確認）');
-    } else {
-      lines.push(`有効期限: ${s.expiryDisplay}`);
-      lines.push(`残日数: ${s.remainingDays}`);
-      lines.push(`状態: ${s.status === 'expired' ? '失効' : s.status === 'warning' ? '警告' : '正常'}`);
-      // 公式のdebug_tokenで確認できれば併記
-      const dbg = fetchTokenDebugInfo_();
-      if (dbg && dbg.expires_at) {
-        const dbgDate = new Date(dbg.expires_at * 1000);
-        const dbgDisp = formatDateForDisplay_(dbgDate);
-        lines.push(`公式有効期限 (debug_token): ${dbgDisp}`);
-      }
-    }
-    lines.push(`現在時刻: ${nowDisp}（TZ: ${tz}）`);
-    
-    const html = HtmlService.createHtmlOutput(`
-      <div style="font-family: Arial, sans-serif; padding: 16px; line-height: 1.6;">
-        <h3 style="margin-top:0;">アカウント情報</h3>
-        <pre style="white-space: pre-wrap;">${lines.map(x => x.replace(/&/g,'&amp;').replace(/</g,'&lt;')).join('\n')}</pre>
-        <p style="color:#666;">※ 値は「基本設定」シートから取得しています。</p>
-      </div>
-    `).setWidth(420).setHeight(260);
-    ui.showModelessDialog(html, 'アカウント情報（詳細）');
-    logOperation('アカウント情報詳細表示', 'info', lines.join('\n'));
-  } catch (error) {
-    ui.alert('エラー', `詳細表示に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
-    logError('showAccountDetails', error);
-  }
-}
+// （廃止）showAccountDetails は削除しました
 
 /**
  * メニューからトークン更新/再認証を実行
  * - REFRESH_TOKENがある場合はリフレッシュ
  * - なければOAuth認証フローを開始
  */
-function openTokenRenewal() {
-  const ui = SpreadsheetApp.getUi();
-  try {
-    ui.alert('再認証', '認証ページを開きます。完了後に長期トークンへ更新されます。', ui.ButtonSet.OK);
-    startOAuth();
-  } catch (error) {
-    ui.alert('エラー', `トークン更新に失敗しました:\n${error.toString()}`, ui.ButtonSet.OK);
-    logError('openTokenRenewal', error);
-  }
-}
+// （廃止）openTokenRenewal は削除しました
 
 // ===========================
 // 設定管理
@@ -635,12 +778,6 @@ function exchangeForLongLivedToken(shortLivedToken) {
     
     if (result.access_token) {
       setConfig('ACCESS_TOKEN', result.access_token);
-      if (typeof result.expires_in === 'number') {
-        setConfig('TOKEN_EXPIRES', new Date(Date.now() + result.expires_in * 1000).toISOString());
-      }
-
-      // 公式debug_tokenで有効期限を最終確定
-      updateTokenExpiryFromDebugToken_();
 
       // ユーザー情報の取得
       getUserInfo(result.access_token);
@@ -656,47 +793,7 @@ function exchangeForLongLivedToken(shortLivedToken) {
  * 公式のdebug_tokenで有効期限を確認（任意呼び出し）
  * @return {Object|null} { expires_at:number, scopes?:string[] }
  */
-function fetchTokenDebugInfo_() {
-  try {
-    const accessToken = getConfig('ACCESS_TOKEN');
-    const clientId = getConfig('CLIENT_ID');
-    const clientSecret = getConfig('CLIENT_SECRET');
-    if (!accessToken || !clientId || !clientSecret) return null;
-    const appToken = `${clientId}|${clientSecret}`;
-    const url = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
-    const resp = fetchWithTracking(url, { muteHttpExceptions: true });
-    const data = JSON.parse(resp.getContentText());
-    if (data && data.data) return { expires_at: data.data.expires_at, scopes: data.data.scopes };
-  } catch (e) {
-    // 失敗時は無視
-  }
-  return null;
-}
-
-/**
- * debug_tokenのexpires_atからTOKEN_EXPIRESを同期
- * @return {boolean} 同期に成功したか
- */
-function updateTokenExpiryFromDebugToken_() {
-  try {
-    const accessToken = getConfig('ACCESS_TOKEN');
-    const clientId = getConfig('CLIENT_ID');
-    const clientSecret = getConfig('CLIENT_SECRET');
-    if (!accessToken || !clientId || !clientSecret) return false;
-    const appToken = `${clientId}|${clientSecret}`;
-    const url = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`;
-    const resp = fetchWithTracking(url, { muteHttpExceptions: true });
-    const data = JSON.parse(resp.getContentText());
-    if (data && data.data && data.data.expires_at) {
-      const expiresISO = new Date(data.data.expires_at * 1000).toISOString();
-      setConfig('TOKEN_EXPIRES', expiresISO);
-      return true;
-    }
-  } catch (e) {
-    // 無視（呼び出し側で必要に応じて通知）
-  }
-  return false;
-}
+// （TOKEN_EXPIRES関連の関数は削除）
 
 // ===========================
 // トリガー設定
@@ -759,7 +856,7 @@ function applyAutomationTriggerSettings(postIntervalMinutes, replyIntervalMinute
   const created = [];
 
   try {
-    const targets = new Set(['processScheduledPosts', 'fetchAndAutoReply', 'refreshAccessToken', 'fetchAndSaveReplies']);
+    const targets = new Set(['processScheduledPosts', 'fetchAndAutoReply', 'fetchAndSaveReplies']);
     const triggers = ScriptApp.getProjectTriggers();
 
     // 対象トリガー削除
@@ -807,13 +904,7 @@ function applyAutomationTriggerSettings(postIntervalMinutes, replyIntervalMinute
       created.push(`fetchAndAutoReply(約${hours}時間)`);
     }
 
-    // アクセストークン更新は固定: 毎日3時
-    ScriptApp.newTrigger('refreshAccessToken')
-      .timeBased()
-      .everyDays(1)
-      .atHour(3)
-      .create();
-    created.push('refreshAccessToken(毎日3時)');
+    // （廃止）トークン更新トリガーは作成しません
 
     const msg = `削除: ${deleted.length ? deleted.join(', ') : 'なし'}\n作成: ${created.join(', ')}`;
     logOperation('トリガー再設定', 'success', msg);
@@ -1275,7 +1366,6 @@ function initializeSettingsSheet() {
     ['ACCESS_TOKEN', '', '長期アクセストークン【必須】'],
     ['USER_ID', '', '（自動入力）ThreadsユーザーID'],
     ['USERNAME', '', '（自動入力）Threadsユーザー名'],
-    ['TOKEN_EXPIRES', '', '（自動入力）トークン有効期限'],
     ['REDIRECT_URI', 'https://script.google.com/a/macros/tsukichiyo.jp/s/AKfycbwZQCRvj97_y_fAUTlWKvC3EsDCoyDRaQT0tALUKK2ZvQXSNr-fFimDPnkFD_N6yimi/exec', 'OAuth認証のリダイレクトURI（Google Apps ScriptのURL）この値は固定で自動的に入ります'],
     ['SCRIPT_ID', '', '（自動入力）このスプレッドシートのスクリプトID']
   ];
@@ -1296,7 +1386,344 @@ function initializeSettingsSheet() {
     '3. REDIRECT_URI - Google Apps ScriptのウェブアプリケーションURL\n' +
     '4. ACCESS_TOKEN - 長期アクセストークン\n\n' +
     '自動入力項目:\n' +
-    '- ACCESS_TOKEN, USER_ID, USERNAME, TOKEN_EXPIRES は認証時に自動設定されます'
+    '- ACCESS_TOKEN, USER_ID, USERNAME は認証時に自動設定されます'
+  );
+  
+  // 必須項目の背景色を設定
+  sheet.getRange(2, 1, 1, 3).setBackground('#F5F5F5');  // CLIENT_ID
+  sheet.getRange(3, 1, 1, 3).setBackground('#F5F5F5');  // CLIENT_SECRET
+  sheet.getRange(4, 1, 1, 3).setBackground('#F5F5F5');  // ACCESS_TOKEN
+  
+  logOperation('基本設定シート初期化', 'success', 'シートを再構成しました');
+}
+
+// ===========================
+// ログシート再構成
+// ===========================
+function resetLogsSheet() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('ログシート再構成', 
+    'ログシートを再構成しますか？\n既存のログは削除されます。', 
+    ui.ButtonSet.YES_NO);
+  
+  if (response !== ui.Button.YES) {
+    return;
+  }
+  
+  try {
+    logOperation(
+      'ログシート再構成',
+      'info',
+      '再構成開始'
+    );
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('ログ');
+    
+    // 既存シートを削除
+    if (sheet) {
+      ss.deleteSheet(sheet);
+      Utilities.sleep(500); // 処理を分散
+    }
+    
+    // 新しいシートを作成（シンプルに）
+    const newSheet = ss.insertSheet('ログ');
+    
+    // ヘッダーのみ設定
+    const headers = ['日時', '操作', 'ステータス', '詳細'];
+    newSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    newSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+    newSheet.setFrozenRows(1);
+    
+    // 最小限の列幅設定
+    newSheet.autoResizeColumns(1, headers.length);
+    
+    ui.alert('ログシートを再構成しました。');
+    console.log('ログシート再構成完了');
+    
+  } catch (error) {
+    console.error('ログシート再構成エラー:', error);
+    ui.alert('エラーが発生しました: ' + error.message);
+  }
+}
+
+// ===========================
+// ログシート初期化
+// ===========================
+function initializeLogsSheet() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 既存のシートを削除
+  let existingSheet = spreadsheet.getSheetByName('ログ');
+  if (existingSheet) {
+    spreadsheet.deleteSheet(existingSheet);
+  }
+  
+  // 新しいシートを作成
+  const sheet = spreadsheet.insertSheet('ログ');
+  
+  // ヘッダー行を設定
+  const headers = [
+    '日時',
+    '操作',
+    'ステータス',
+    '詳細'
+  ];
+  
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  // ヘッダー行のフォーマット
+  sheet.getRange(1, 1, 1, headers.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  
+  // 1行目を固定
+  sheet.setFrozenRows(1);
+  
+  // 列幅の調整
+  sheet.setColumnWidth(1, 150); // 日時
+  sheet.setColumnWidth(2, 200); // 操作
+  sheet.setColumnWidth(3, 100); // ステータス
+  sheet.setColumnWidth(4, 500); // 詳細
+  
+  // 日付列のフォーマット
+  sheet.getRange(2, 1, sheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  
+  // 条件付き書式を追加（ステータスの視覚化）
+  const statusRange = sheet.getRange(2, 3, sheet.getMaxRows() - 1, 1);
+  
+  const successRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('success')
+    .setFontColor('#333333')
+    .setRanges([statusRange])
+    .build();
+  
+  const infoRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('info')
+    .setFontColor('#666666')
+    .setRanges([statusRange])
+    .build();
+    
+  const warningRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('warning')
+    .setFontColor('#333333')
+    .setRanges([statusRange])
+    .build();
+    
+  const errorRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('error')
+    .setFontColor('#FF0000')
+    .setRanges([statusRange])
+    .build();
+  
+  sheet.setConditionalFormatRules([successRule, infoRule, warningRule, errorRule]);
+  
+  // 説明コメントを追加
+  sheet.getRange('A1').setNote(
+    'システムログシート\n\n' +
+    '日時: 操作が実行された日時\n' +
+    '操作: 実行された機能名\n' +
+    'ステータス: success(成功), info(情報), warning(警告), error(エラー)\n' +
+    '詳細: 操作の詳細情報やエラーメッセージ'
+  );
+  
+  // 初期ログエントリ（直接2行目に追加）
+  sheet.getRange(2, 1, 1, 4).setValues([[
+    new Date(),
+    'ログシート初期化',
+    'success',
+    'ログシートを再構成しました'
+  ]]);
+  
+  // 初期ログのフォントウェイトを標準に
+  sheet.getRange(2, 1, 1, 4).setFontWeight('normal');
+}
+
+// ===========================
+// すべてのシートを再構成
+// ===========================
+function resetAllSheets() {
+  const ui = SpreadsheetApp.getUi();
+  
+  // パスワード確認
+  if (!verifyPassword('すべてのシート再構成')) {
+    return;
+  }
+  
+  const response = ui.alert(
+    'すべてのシートを再構成',
+    'すべてのシートを削除して再作成しますか？\n\n' +
+    '⚠️ 警告:\n' +
+    '・すべてのデータが削除されます\n' +
+    '・設定情報も初期化されます\n' +
+    '・この操作は取り消せません',
+    ui.ButtonSet.YES_NO
+  );
+  
+  if (response == ui.Button.YES) {
+    try {
+      // 各シートを順番に再構成
+      initializeSettingsSheet();
+      SpreadsheetApp.flush();
+      
+      initializeScheduledPostsSheet();
+      SpreadsheetApp.flush();
+      
+      initializeRepliesSheet();
+      SpreadsheetApp.flush();
+      
+      initializeKeywordSettingsSheet();
+      SpreadsheetApp.flush();
+      
+      initializeReplyHistorySheet();
+      SpreadsheetApp.flush();
+      
+      initializeLogsSheet();
+      SpreadsheetApp.flush();
+      
+      // 完了メッセージ
+      ui.alert(
+        '再構成完了',
+        'すべてのシートを再構成しました。\n\n' +
+        '次のステップ:\n' +
+        '1. 基本設定シートに必要な情報を入力\n' +
+        '2. 初期設定を実行\n' +
+        '3. トリガーを設定',
+        ui.ButtonSet.OK
+      );
+      
+      logOperation('全シート再構成', 'success', 'すべてのシートを再構成しました');
+      
+    } catch (error) {
+      console.error('全シート再構成エラー:', error);
+      ui.alert('エラー', 'シートの再構成中にエラーが発生しました:\n' + error.message, ui.ButtonSet.OK);
+      logError('resetAllSheets', error);
+    }
+  }
+}
+
+// ===========================
+// 受信したリプライシート再構成（非破壊）
+// ===========================
+function resetRepliesSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const name = REPLIES_SHEET_NAME;
+  const oldSheet = ss.getSheetByName(name);
+  const desiredHeaders = ['取得日時','リプライID','元投稿ID','リプライ日時','ユーザー名','リプライ内容','最終更新日時','メモ'];
+  
+  if (!oldSheet) {
+    // なければ初期化
+    initializeRepliesSheet();
+    return;
+  }
+  
+  const oldValues = oldSheet.getDataRange().getValues();
+  const oldHeaders = (oldValues.length > 0) ? oldValues[0].map(h => (h || '').toString()) : [];
+  const unknownHeaders = [];
+  for (let c = 0; c < oldHeaders.length; c++) {
+    const h = oldHeaders[c] || '';
+    if (h && desiredHeaders.indexOf(h) === -1) unknownHeaders.push(h);
+  }
+  const newHeaders = desiredHeaders.concat(unknownHeaders);
+  
+  const tmpName = `${name}_TMP`;
+  const tmpSheet = ss.getSheetByName(tmpName) ? ss.getSheetByName(tmpName) : ss.insertSheet(tmpName);
+  tmpSheet.clear();
+  tmpSheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+  tmpSheet.getRange(1, 1, 1, newHeaders.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  tmpSheet.setFrozenRows(1);
+  
+  // 列幅・日付書式
+  tmpSheet.setColumnWidth(1, 150);
+  tmpSheet.setColumnWidth(2, 150);
+  tmpSheet.setColumnWidth(3, 150);
+  tmpSheet.setColumnWidth(4, 150);
+  tmpSheet.setColumnWidth(5, 120);
+  tmpSheet.setColumnWidth(6, 400);
+  tmpSheet.setColumnWidth(7, 150);
+  tmpSheet.setColumnWidth(8, 200);
+  tmpSheet.getRange(2, 1, tmpSheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  tmpSheet.getRange(2, 4, tmpSheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  tmpSheet.getRange(2, 7, tmpSheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  
+  // データ再配置
+  const oldHeaderIndexMap = {};
+  for (let i = 0; i < oldHeaders.length; i++) oldHeaderIndexMap[oldHeaders[i]] = i;
+  const newRows = [];
+  for (let r = 1; r < oldValues.length; r++) {
+    const oldRow = oldValues[r];
+    if (!oldRow || oldRow.length === 0) continue;
+    const newRow = new Array(newHeaders.length).fill('');
+    for (let c = 0; c < newHeaders.length; c++) {
+      const header = newHeaders[c];
+      if (oldHeaderIndexMap.hasOwnProperty(header)) newRow[c] = oldRow[oldHeaderIndexMap[header]];
+    }
+    newRows.push(newRow);
+  }
+  if (newRows.length > 0) tmpSheet.getRange(2, 1, newRows.length, newHeaders.length).setValues(newRows);
+  
+  ss.deleteSheet(oldSheet);
+  tmpSheet.setName(name);
+  logOperation('受信したリプライシート再構成（非破壊）', 'success', `行数: ${newRows.length}`);
+}
+
+// ===========================
+// 基本設定シート初期化
+// ===========================
+function initializeSettingsSheet() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 既存のシートを削除
+  let existingSheet = spreadsheet.getSheetByName('基本設定');
+  if (existingSheet) {
+    spreadsheet.deleteSheet(existingSheet);
+  }
+  
+  // 新しいシートを作成
+  const sheet = spreadsheet.insertSheet('基本設定');
+  
+  // ヘッダー行を設定
+  const headers = ['設定項目', '値', '説明'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  
+  // ヘッダー行のフォーマット
+  sheet.getRange(1, 1, 1, headers.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  
+  // 設定項目のデータ
+  const settings = [
+    ['CLIENT_ID', '（後で入力）', 'Meta開発者ダッシュボードのThreadsアプリID【必須】'],
+    ['CLIENT_SECRET', '（後で入力）', 'Meta開発者ダッシュボードのThreadsアプリシークレット【必須】'],
+    ['ACCESS_TOKEN', '', '長期アクセストークン【必須】'],
+    ['USER_ID', '', '（自動入力）ThreadsユーザーID'],
+    ['USERNAME', '', '（自動入力）Threadsユーザー名'],
+    ['REDIRECT_URI', 'https://script.google.com/a/macros/tsukichiyo.jp/s/AKfycbwZQCRvj97_y_fAUTlWKvC3EsDCoyDRaQT0tALUKK2ZvQXSNr-fFimDPnkFD_N6yimi/exec', 'OAuth認証のリダイレクトURI（Google Apps ScriptのURL）この値は固定で自動的に入ります'],
+    ['SCRIPT_ID', '', '（自動入力）このスプレッドシートのスクリプトID']
+  ];
+  
+  sheet.getRange(2, 1, settings.length, settings[0].length).setValues(settings);
+  
+  // 列幅の調整
+  sheet.setColumnWidth(1, 150);  // 設定項目
+  sheet.setColumnWidth(2, 300);  // 値
+  sheet.setColumnWidth(3, 400);  // 説明
+  
+  // 説明コメントを追加
+  sheet.getRange('A1').setNote(
+    '基本設定シート\n\n' +
+    '必須項目:\n' +
+    '1. CLIENT_ID - Meta開発者ダッシュボードのThreadsアプリから取得\n' +
+    '2. CLIENT_SECRET - Meta開発者ダッシュボードのThreadsアプリから取得\n' +
+    '3. REDIRECT_URI - Google Apps ScriptのウェブアプリケーションURL\n' +
+    '4. ACCESS_TOKEN - 長期アクセストークン\n\n' +
+    '自動入力項目:\n' +
+    '- ACCESS_TOKEN, USER_ID, USERNAME は認証時に自動設定されます'
   );
   
   // 必須項目の背景色を設定

@@ -91,41 +91,177 @@ function doPost(e) {
 }
 
 // ===========================
-// Webhook検証エンドポイント（初回設定時）
+// Google Drive画像プロキシ処理
+// ===========================
+function handleDriveProxy(e) {
+  try {
+    console.log('===== Google Driveプロキシ処理開始 =====');
+
+    const params = e.parameter || {};
+    const fileId = params.id ? params.id.trim() : extractDriveFileId(params.url);
+
+    if (!fileId) {
+      console.error('ファイルIDまたは有効なURLが見つかりません');
+      return badRequest_("missing 'id' or valid 'url'");
+    }
+
+    console.log('対象ファイルID:', fileId);
+
+    // Driveからファイル取得
+    let file;
+    try {
+      file = DriveApp.getFileById(fileId);
+      console.log('ファイル名:', file.getName());
+    } catch (err) {
+      console.error('ファイルアクセスエラー:', err);
+      return notFound_("file not found or no access: " + err);
+    }
+
+    const originalBlob = file.getBlob();
+    const originalMime = (originalBlob.getContentType() || "").toLowerCase();
+    console.log('元のMIMEタイプ:', originalMime);
+
+    // JPEG以外は可能な限りJPEG化
+    let jpegBlob;
+    if (originalMime === "image/jpeg" || originalMime === "image/jpg") {
+      jpegBlob = originalBlob;
+      console.log('JPEG形式のため変換不要');
+    } else {
+      try {
+        jpegBlob = originalBlob.getAs("image/jpeg");
+        console.log('JPEGに変換成功');
+      } catch (convErr) {
+        console.error('JPEG変換失敗:', convErr);
+        return unsupported_("cannot convert to JPEG from: " + originalMime);
+      }
+    }
+
+    // ファイル名を整形（拡張子をjpgに）
+    const baseName = file.getName().replace(/\.[^.]+$/, "");
+    const outName = baseName + ".jpg";
+    jpegBlob.setName(outName);
+
+    // レスポンスヘッダ
+    const headers = {
+      "Content-Type": "image/jpeg",
+      "Content-Disposition": 'inline; filename="' + escapeHeaderValue_(outName) + '"',
+      "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff"
+    };
+
+    console.log('プロキシ処理完了 - ファイルサイズ:', jpegBlob.getBytes().length, 'bytes');
+
+    return ContentService
+      .createBinaryOutput()
+      .setContent(jpegBlob.getBytes())
+      .setMimeType(ContentService.MimeType.JPEG)
+      .setHeaders(headers);
+
+  } catch (err) {
+    console.error('プロキシ処理エラー:', err);
+    return serverError_("unexpected error: " + err);
+  }
+}
+
+// ===========================
+// Google Drive URLからファイルIDを抽出
+// ===========================
+function extractDriveFileId(url) {
+  if (!url) return null;
+  const u = url.trim();
+
+  // /file/d/<ID>/view
+  let m = u.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (m && m[1]) return m[1];
+
+  // open?id=<ID>
+  m = u.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m && m[1]) return m[1];
+
+  // uc?export=download&id=<ID> or uc?id=<ID>
+  m = u.match(/\/uc(?:\?|\/).*?[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m && m[1]) return m[1];
+
+  // それ以外は不可
+  return null;
+}
+
+// ===========================
+// エラーレスポンス共通関数
+// ===========================
+function badRequest_(msg) {
+  return jsonError_(400, "bad_request", msg);
+}
+
+function notFound_(msg) {
+  return jsonError_(404, "not_found", msg);
+}
+
+function unsupported_(msg) {
+  return jsonError_(415, "unsupported_media_type", msg);
+}
+
+function serverError_(msg) {
+  return jsonError_(500, "server_error", msg);
+}
+
+function jsonError_(status, code, msg) {
+  const payload = JSON.stringify({
+    error: {
+      code: code,
+      message: msg
+    }
+  });
+  const out = ContentService.createTextOutput(payload);
+  out.setMimeType(ContentService.MimeType.JSON);
+  return out;
+}
+
+function escapeHeaderValue_(s) {
+  return s.replace(/["\\]/g, "");
+}
+
+// ===========================
+// Google Drive画像プロキシエンドポイント
 // ===========================
 function doGet(e) {
   try {
+    // Google Driveプロキシリクエストかどうかを確認
+    if (e.parameter.id || e.parameter.url) {
+      return handleDriveProxy(e);
+    }
+
     // Webhook検証リクエストかどうかを確認
     if (e.parameter['hub.mode'] && e.parameter['hub.verify_token'] && e.parameter['hub.challenge']) {
       console.log('===== Webhook検証リクエスト =====');
-      
+
       const mode = e.parameter['hub.mode'];
       const token = e.parameter['hub.verify_token'];
       const challenge = e.parameter['hub.challenge'];
-      
+
       console.log(`Mode: ${mode}, Token: ${token}, Challenge: ${challenge}`);
-      
+
       // 検証モードかつトークンが一致する場合
       if (mode === 'subscribe' && token === WEBHOOK_CONFIG.VERIFY_TOKEN) {
         console.log('Webhook検証成功');
-        
+
         // challengeをそのまま返す（プレーンテキストとして）
         return ContentService
           .createTextOutput(challenge)
           .setMimeType(ContentService.MimeType.TEXT);
       }
-      
+
       console.error('Webhook検証失敗: トークンが一致しません');
       return ContentService
         .createTextOutput('Forbidden')
         .setMimeType(ContentService.MimeType.TEXT);
     }
-    
+
     // Webhook検証以外のリクエストの場合
     return ContentService
       .createTextOutput('Threads Webhook Endpoint is active')
       .setMimeType(ContentService.MimeType.TEXT);
-    
+
   } catch (error) {
     console.error('Webhook検証エラー:', error);
     return ContentService

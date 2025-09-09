@@ -392,6 +392,19 @@ function recordReply(comment, replyText) {
   const range = sheet.getRange(lastRow, 1, 1, 6);
   range.setBackground(null);
   range.setFontColor('#000000');
+  
+  // 最新100件のみ表示（ヘッダーを除くデータ行を100件に制限）
+  try {
+    const maxDataRows = 100;
+    const totalDataRows = sheet.getLastRow() - 1; // ヘッダー除く
+    if (totalDataRows > maxDataRows) {
+      const rowsToDelete = totalDataRows - maxDataRows;
+      // 古い行（ヘッダー直下）から削除
+      sheet.deleteRows(2, rowsToDelete);
+    }
+  } catch (e) {
+    console.warn('自動応答結果のトリミング中に警告:', e);
+  }
 }
 
 // ===========================
@@ -855,23 +868,65 @@ function testSpecificReply() {
 // ===========================
 function resetReplyHistorySheet() {
   const ui = SpreadsheetApp.getUi();
-  
   const response = ui.alert(
     '自動応答結果シート再構成',
-    '自動応答結果シートを削除して再作成しますか？\n\n' +
-    '⚠️ 既存の自動応答履歴はすべて削除されます。',
+    '既存の入力値は保持したまま、レイアウトと機能を最新化します。',
     ui.ButtonSet.YES_NO
   );
+  if (response !== ui.Button.YES) return;
   
-  if (response == ui.Button.YES) {
-    try {
-      initializeReplyHistorySheet();
-      ui.alert('自動応答結果シートを再構成しました。');
-    } catch (error) {
-      console.error('自動応答結果シート再構成エラー:', error);
-      ui.alert('エラーが発生しました: ' + error.message);
-    }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const name = '自動応答結果';
+  const oldSheet = ss.getSheetByName(name);
+  if (!oldSheet) {
+    initializeReplyHistorySheet();
+    return;
   }
+  const desiredHeaders = ['送信日時','コメントID','ユーザーID','元のコメント','返信内容','マッチキーワード'];
+  const oldValues = oldSheet.getDataRange().getValues();
+  const oldHeaders = (oldValues.length > 0) ? oldValues[0].map(h => (h || '').toString()) : [];
+  const unknownHeaders = [];
+  for (let c = 0; c < oldHeaders.length; c++) {
+    const h = oldHeaders[c] || '';
+    if (h && desiredHeaders.indexOf(h) === -1) unknownHeaders.push(h);
+  }
+  const newHeaders = desiredHeaders.concat(unknownHeaders);
+  
+  const tmpName = `${name}_TMP`;
+  const tmpSheet = ss.getSheetByName(tmpName) ? ss.getSheetByName(tmpName) : ss.insertSheet(tmpName);
+  tmpSheet.clear();
+  tmpSheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+  tmpSheet.getRange(1, 1, 1, newHeaders.length)
+    .setBackground('#E0E0E0')
+    .setFontColor('#000000')
+    .setFontWeight('bold');
+  tmpSheet.setFrozenRows(1);
+  tmpSheet.setColumnWidth(1, 150);
+  tmpSheet.setColumnWidth(2, 150);
+  tmpSheet.setColumnWidth(3, 150);
+  tmpSheet.setColumnWidth(4, 350);
+  tmpSheet.setColumnWidth(5, 350);
+  tmpSheet.setColumnWidth(6, 120);
+  tmpSheet.getRange(2, 1, tmpSheet.getMaxRows() - 1, 1).setNumberFormat('yyyy/mm/dd hh:mm:ss');
+  
+  const oldHeaderIndexMap = {};
+  for (let i = 0; i < oldHeaders.length; i++) oldHeaderIndexMap[oldHeaders[i]] = i;
+  const newRows = [];
+  for (let r = 1; r < oldValues.length; r++) {
+    const oldRow = oldValues[r];
+    if (!oldRow || oldRow.length === 0) continue;
+    const newRow = new Array(newHeaders.length).fill('');
+    for (let c = 0; c < newHeaders.length; c++) {
+      const header = newHeaders[c];
+      if (oldHeaderIndexMap.hasOwnProperty(header)) newRow[c] = oldRow[oldHeaderIndexMap[header]];
+    }
+    newRows.push(newRow);
+  }
+  if (newRows.length > 0) tmpSheet.getRange(2, 1, newRows.length, newHeaders.length).setValues(newRows);
+  
+  ss.deleteSheet(oldSheet);
+  tmpSheet.setName(name);
+  logOperation('自動応答結果シート再構成（非破壊）', 'success', `行数: ${newRows.length}`);
 }
 
 // ===========================

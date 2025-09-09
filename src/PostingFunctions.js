@@ -122,9 +122,9 @@ function initializeScheduledPostsSheet() {
   sheet.setColumnWidth(20, 300);  // エラー
   
   // データ検証を追加
-  // ステータス列
+  // ステータス列（処理中 を追加）
   const statusRule = SpreadsheetApp.newDataValidation()
-    .requireValueInList(['投稿予約中', '投稿済', '失敗', 'キャンセル'])
+    .requireValueInList(['投稿予約中', '処理中', '投稿済', '失敗', 'キャンセル'])
     .setAllowInvalid(false)
     .build();
   sheet.getRange(2, 5, 1000, 1).setDataValidation(statusRule);
@@ -186,8 +186,15 @@ function initializeScheduledPostsSheet() {
   
   const pendingRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('投稿予約中')
-    .setBackground('#F5F5F5')
+    .setBackground('#F7F7F7')
     .setFontColor('#333333')
+    .setRanges([statusRange])
+    .build();
+  
+  const processingRule = SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('処理中')
+    .setBackground('#ECECEC')
+    .setFontColor('#000000')
     .setRanges([statusRange])
     .build();
   
@@ -200,19 +207,19 @@ function initializeScheduledPostsSheet() {
     
   const failedRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('失敗')
-    .setBackground('#F5F5F5')
+    .setBackground('#F7F7F7')
     .setFontColor('#FF0000')
     .setRanges([statusRange])
     .build();
     
   const cancelledRule = SpreadsheetApp.newConditionalFormatRule()
     .whenTextEqualTo('キャンセル')
-    .setBackground('#E0E0E0')
+    .setBackground('#E8E8E8')
     .setFontColor('#666666')
     .setRanges([statusRange])
     .build();
   
-  sheet.setConditionalFormatRules([pendingRule, publishedRule, failedRule, cancelledRule]);
+  sheet.setConditionalFormatRules([pendingRule, processingRule, publishedRule, failedRule, cancelledRule]);
   
   // 1行目を固定
   sheet.setFrozenRows(1);
@@ -602,6 +609,11 @@ function postTextOnly(text) {
     return { success: false, error: '認証情報が見つかりません' };
   }
   
+  // text必須チェック
+  if (!text || String(text).trim().length === 0) {
+    return { success: false, error: '投稿内容（text）が空です' };
+  }
+  
   try {
     console.log('postTextOnly 開始 - テキスト:', text.substring(0, 50) + '...');
     
@@ -664,6 +676,9 @@ function postWithImage(text, imageUrl) {
     return { success: false, error: '認証情報が見つかりません' };
   }
   
+  // textは任意だが空文字で送るとAPIが拒否するケースがあるため安全策
+  const safeText = (text && String(text).trim().length > 0) ? String(text) : '';
+  
   try {
     // Google DriveのURLを公開URLに変換
     const publicImageUrl = convertToPublicUrl(imageUrl);
@@ -680,7 +695,7 @@ function postWithImage(text, imageUrl) {
         payload: JSON.stringify({
           media_type: 'IMAGE',
           image_url: publicImageUrl,
-          text: text || ''
+          text: safeText
         }),
         muteHttpExceptions: true
       }
@@ -901,7 +916,7 @@ function postWithVideo(text, videoUrl) {
     const createParams = {
       'media_type': 'VIDEO',
       'video_url': normalizedUrl,
-      'text': text || ''
+      'text': (text && String(text).trim().length > 0) ? String(text) : ''
     };
     
     console.log('API呼び出しURL:', createUrl);
@@ -962,7 +977,7 @@ function postWithMultipleImages(text, imageUrls) {
     const payload = {
       media_type: 'CAROUSEL',
       children: publicUrls.map(url => ({ media_url: url })),
-      text: text
+      text: (text && String(text).trim().length > 0) ? String(text) : ''
     };
     
     const createResponse = fetchWithTracking(
@@ -1059,6 +1074,11 @@ function postReplyTextOnly(text, replyToId) {
     return { success: false, error: '認証情報が見つかりません' };
   }
   
+  // text必須チェック
+  if (!text || String(text).trim().length === 0) {
+    return { success: false, error: '返信内容（text）が空です' };
+  }
+  
   try {
     // メディアコンテナの作成（返信先IDを指定）
     const createResponse = fetchWithTracking(
@@ -1120,7 +1140,7 @@ function postReplyWithImage(text, imageUrl, replyToId) {
         payload: JSON.stringify({
           media_type: 'IMAGE',
           image_url: publicImageUrl,
-          text: text || '',
+          text: (text && String(text).trim().length > 0) ? String(text) : '',
           reply_to_id: replyToId
         }),
         muteHttpExceptions: true
@@ -1163,7 +1183,7 @@ function postReplyWithMultipleImages(text, imageUrls, replyToId) {
     const payload = {
       media_type: 'CAROUSEL',
       children: publicUrls.map(url => ({ media_url: url })),
-      text: text,
+      text: (text && String(text).trim().length > 0) ? String(text) : '',
       reply_to_id: replyToId
     };
     
@@ -1198,36 +1218,76 @@ function postReplyWithMultipleImages(text, imageUrls, replyToId) {
 }
 
 // ===========================
-// URL変換
+// URL変換（Google Drive共有対応）
 // ===========================
 function convertToPublicUrl(url) {
+  if (!url) return url;
+
   // Google DriveのURLパターンをチェック
   const drivePatterns = [
     /drive\.google\.com\/file\/d\/([a-zA-Z0-9-_]+)/,
     /drive\.google\.com\/open\?id=([a-zA-Z0-9-_]+)/,
-    /docs\.google\.com\/.*\/d\/([a-zA-Z0-9-_]+)/
+    /docs\.google\.com\/.*\/d\/([a-zA-Z0-9-_]+)/,
+    /drive\.google\.com\/uc\?.*?[?&]id=([a-zA-Z0-9-_]+)/
   ];
-  
+
   for (const pattern of drivePatterns) {
     const match = url.match(pattern);
     if (match) {
       const fileId = match[1];
-      
+      console.log('Google Driveリンクを検出:', fileId);
+
       try {
-        // ファイルの共有設定を変更
+        // ファイルの共有設定を変更（リンクを知っている全員が閲覧可能に）
         const file = DriveApp.getFileById(fileId);
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        
-        // 直接ダウンロードURLを返す
-        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+        // ファイルのMIMEタイプを確認
+        const mimeType = file.getMimeType();
+        console.log('ファイルMIMEタイプ:', mimeType);
+
+        // 画像ファイルの場合のみ変換
+        if (mimeType && mimeType.startsWith('image/')) {
+          // より確実なダウンロードURLを生成
+          const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+          console.log('変換後URL:', downloadUrl);
+
+          // URLが有効か簡易チェック
+          try {
+            const testResponse = UrlFetchApp.fetch(downloadUrl, {
+              method: 'get',
+              headers: { 'Range': 'bytes=0-0' },
+              muteHttpExceptions: true,
+              followRedirects: true
+            });
+
+            const statusCode = testResponse.getResponseCode();
+            console.log('URLアクセスチェック結果:', statusCode);
+
+            if (statusCode === 200 || statusCode === 206) {
+              return downloadUrl;
+            } else {
+              console.warn('URLアクセスに失敗、元のURLを使用:', statusCode);
+              return url;
+            }
+          } catch (testError) {
+            console.warn('URLテストエラー、元のURLを使用:', testError.toString());
+            return url;
+          }
+        } else {
+          console.log('画像ファイルではないため変換せず:', mimeType);
+          return url;
+        }
+
       } catch (error) {
+        console.error('convertToPublicUrlエラー:', error);
         logError('convertToPublicUrl', error);
         // エラーの場合は元のURLを返す
         return url;
       }
     }
   }
-  
+
   // Google Drive以外のURLはそのまま返す
   return url;
 }
@@ -1441,26 +1501,70 @@ function manualPostExecution() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
     '手動投稿実行',
-    '予約投稿を今すぐ実行しますか？',
+    '「投稿予約中」で、現在時刻までに予定時刻を過ぎている投稿のみを直ちに投稿します。\n\n' +
+    '※ 投稿内容が空欄の行は無視します。',
     ui.ButtonSet.YES_NO
   );
+  if (response !== ui.Button.YES) return;
   
-  if (response == ui.Button.YES) {
-    processScheduledPosts();
-    ui.alert('投稿処理を実行しました。詳細はログをご確認ください。');
+  try {
+    const result = manualExecuteDueScheduledPosts();
+    ui.alert('手動投稿完了', `対象: ${result.totalCandidates}件\n無視(空欄): ${result.skippedEmpty}件\n投稿開始: ${result.started}件`, ui.ButtonSet.OK);
+  } catch (error) {
+    logError('manualPostExecution', error);
+    ui.alert('エラー', error.toString(), ui.ButtonSet.OK);
   }
 }
 
 // ===========================
-// アクセストークンリフレッシュ
+// 手動投稿ロジック（現在時刻を過ぎた pending のみ、空欄は無視）
 // ===========================
-function refreshAccessToken() {
-  // Threads APIはrefresh_tokenによる延長を提供しないため、再認証に誘導
-  try {
-    const ui = SpreadsheetApp.getUi();
-    ui.alert('再認証が必要です', 'Threadsの長期トークン更新は再認証で行います。認証画面を開きます。', ui.ButtonSet.OK);
-    if (typeof startOAuth === 'function') startOAuth();
-  } catch (error) {
-    logError('refreshAccessToken', error);
+function manualExecuteDueScheduledPosts() {
+  const accessToken = getConfig('ACCESS_TOKEN');
+  const userId = getConfig('USER_ID');
+  if (!accessToken || !userId) {
+    throw new Error('認証情報が未設定のため実行できません');
   }
+  
+  // getScheduledPosts は「投稿予約中」かつ 現在時刻までに予定時刻を過ぎた行のみ返す
+  const allDuePosts = getScheduledPosts();
+  const totalCandidates = allDuePosts.length;
+  
+  // 投稿内容が空欄のものは無視
+  const posts = allDuePosts.filter(p => p.content && String(p.content).trim().length > 0);
+  const skippedEmpty = totalCandidates - posts.length;
+  
+  if (posts.length === 0) {
+    logOperation('手動投稿', 'info', `対象0件（空欄スキップ${skippedEmpty}）`);
+    return { totalCandidates, skippedEmpty, started: 0 };
+  }
+  
+  // ツリーごとに処理（グローバル一時停止フラグは無視）
+  const postGroups = groupPostsByTree(posts);
+  let started = 0;
+  
+  Object.entries(postGroups).forEach(([groupId, groupPosts]) => {
+    try {
+      if (groupPosts.length === 1 && !groupPosts[0].treeId) {
+        updatePostStatus(groupPosts[0].row, 'processing', null, null);
+        const res = processPost(groupPosts[0]);
+        if (res) started++;
+      } else {
+        groupPosts.forEach(p => updatePostStatus(p.row, 'processing', null, null));
+        processTreePosts(groupPosts);
+        started += groupPosts.length;
+      }
+    } catch (e) {
+      logError('manualExecuteDueScheduledPosts', e);
+      // エラー時は各行を pending に戻す
+      groupPosts.forEach(post => {
+        updatePostStatus(post.row, 'pending', null, e.toString());
+      });
+    }
+  });
+  
+  logOperation('手動投稿', 'success', `対象${totalCandidates}件, 空欄スキップ${skippedEmpty}, 投稿開始${started}件`);
+  return { totalCandidates, skippedEmpty, started };
 }
+
+// （廃止）refreshAccessToken は削除しました

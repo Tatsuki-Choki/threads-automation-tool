@@ -339,8 +339,7 @@
         // リプライ取得トリガー
         html += createStatusItem('リプライ取得', status.fetchAndAutoReply);
         
-        // トークン更新トリガー
-        html += createStatusItem('トークン更新', status.refreshAccessToken);
+        <!-- トークン更新トリガーは廃止 -->
         
         statusDiv.innerHTML = html;
       }
@@ -393,16 +392,12 @@
             update: document.getElementById('updateReply').checked,
             interval: parseInt(document.getElementById('replyInterval').value)
           },
-          refreshAccessToken: {
-            update: document.getElementById('updateToken').checked,
-            hour: parseInt(document.getElementById('tokenHour').value)
-          }
+          // refreshAccessToken は廃止
         };
         
         // 少なくとも1つは選択されているか確認
         if (!updateConfig.processScheduledPosts.update && 
-            !updateConfig.fetchAndAutoReply.update && 
-            !updateConfig.refreshAccessToken.update) {
+            !updateConfig.fetchAndAutoReply.update) {
           showMessage('更新するトリガーを選択してください。', 'error');
           return;
         }

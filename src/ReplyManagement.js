@@ -424,6 +424,11 @@ function RM_sendAutoReply(replyId, reply, keyword, config) {
     // 自動返信プレフィックス
     // replyText = '[自動返信] ' + replyText;
     
+    // text必須チェック
+    if (!replyText || String(replyText).trim().length === 0) {
+      console.warn('自動返信テキストが空のため送信をスキップ');
+      return false;
+    }
     console.log(`返信を作成中: @${username} への返信「${replyText}」`);
     
     // 返信作成
@@ -515,6 +520,19 @@ function RM_recordAutoReply(reply, replyText, matchedKeyword) {
     
     // キャッシュも更新
     RM_updateReplyCache(reply.id, reply.from?.id || username);
+    
+    // 最新100件のみ表示（ヘッダーを除くデータ行を100件に制限）
+    try {
+      const maxDataRows = 100;
+      const totalDataRows = sheet.getLastRow() - 1; // ヘッダー除く
+      if (totalDataRows > maxDataRows) {
+        const rowsToDelete = totalDataRows - maxDataRows;
+        // 古い行（ヘッダー直下）から削除
+        sheet.deleteRows(2, rowsToDelete);
+      }
+    } catch (e) {
+      console.warn('自動応答結果（RM）トリミング中に警告:', e);
+    }
     
   } catch (error) {
     console.error('返信履歴記録エラー:', error);
