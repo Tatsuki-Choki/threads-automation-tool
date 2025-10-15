@@ -234,7 +234,7 @@ function processScheduledPosts() {
   // 一時停止中ならスキップ
   try {
     const flag = PropertiesService.getScriptProperties().getProperty('GLOBAL_AUTOMATION_PAUSED');
-    const paused = (flag === null || flag === '' || flag === 'true');
+    const paused = (flag === 'true');
     if (paused) {
       console.log('グローバル一時停止中のため、予約投稿処理をスキップ');
       return;
@@ -973,39 +973,88 @@ function postWithMultipleImages(text, imageUrls) {
     // 各画像URLを公開URLに変換
     const publicUrls = imageUrls.map(url => convertToPublicUrl(url));
     
-    // メディアコンテナの作成
-    const payload = {
+    // 子コンテナIDを格納する配列
+    const childContainerIds = [];
+    
+    // 各画像に対して子コンテナを作成
+    for (let i = 0; i < publicUrls.length; i++) {
+      const imageUrl = publicUrls[i];
+      
+      const childPayload = {
+        is_carousel_item: true,
+        image_url: imageUrl,
+        media_type: 'IMAGE',
+        access_token: accessToken
+      };
+      
+      const childResponse = fetchWithTracking(
+        `${THREADS_API_BASE}/v1.0/${userId}/threads`,
+        {
+          method: 'POST',
+          contentType: 'application/json',
+          payload: JSON.stringify(childPayload),
+          muteHttpExceptions: true
+        }
+      );
+      
+      const childResult = JSON.parse(childResponse.getContentText());
+      
+      if (childResult.id) {
+        childContainerIds.push(childResult.id);
+        logOperation('子コンテナ作成', 'success', `${i + 1}枚目の子コンテナID: ${childResult.id}`);
+        
+        // 子コンテナ処理完了待機
+        Utilities.sleep(1000);
+      } else {
+        const errorMsg = `カルーセル子コンテナ(${i + 1}枚目)の作成失敗: ${childResult.error?.message || 'Unknown error'}`;
+        logOperation('子コンテナ作成', 'error', errorMsg);
+        return { success: false, error: errorMsg };
+      }
+    }
+    
+    // すべての子コンテナが作成されたことを確認
+    if (childContainerIds.length !== publicUrls.length) {
+      const errorMsg = `カルーセル子コンテナ(${childContainerIds.length}/${publicUrls.length})の処理完了を確認できませんでした`;
+      logOperation('カルーセル作成', 'error', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+    
+    // 親カルーセルコンテナを作成
+    const carouselPayload = {
       media_type: 'CAROUSEL',
-      children: publicUrls.map(url => ({ media_url: url })),
-      text: (text && String(text).trim().length > 0) ? String(text) : ''
+      children: childContainerIds.join(','),
+      text: (text && String(text).trim().length > 0) ? String(text) : '',
+      access_token: accessToken
     };
     
-    const createResponse = fetchWithTracking(
+    const carouselResponse = fetchWithTracking(
       `${THREADS_API_BASE}/v1.0/${userId}/threads`,
       {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        payload: JSON.stringify(payload),
+        contentType: 'application/json',
+        payload: JSON.stringify(carouselPayload),
         muteHttpExceptions: true
       }
     );
     
-    const createResult = JSON.parse(createResponse.getContentText());
+    const carouselResult = JSON.parse(carouselResponse.getContentText());
     
-    if (createResult.id) {
-      // 少し待機（画像処理のため）
-      Utilities.sleep(5000); // 複数画像の場合は少し長めに待機
+    if (carouselResult.id) {
+      logOperation('カルーセル作成', 'success', `カルーセルコンテナID: ${carouselResult.id}`);
+      
+      // 処理完了を待機
+      Utilities.sleep(3000);
       
       // 投稿の公開
-      return publishPost(createResult.id);
+      return publishPost(carouselResult.id);
     } else {
-      return { success: false, error: createResult.error?.message || 'カルーセル作成失敗' };
+      const errorMsg = carouselResult.error?.message || 'カルーセル作成失敗';
+      logOperation('カルーセル作成', 'error', errorMsg);
+      return { success: false, error: errorMsg };
     }
     
   } catch (error) {
+    logOperation('カルーセル投稿', 'error', error.toString());
     return { success: false, error: error.toString() };
   }
 }
